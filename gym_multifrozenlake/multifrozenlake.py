@@ -1,0 +1,565 @@
+import gym
+import math
+from gym.envs.toy_text.utils import categorical_sample
+
+from contextlib import closing
+from io import StringIO
+from os import path
+from typing import List, Optional
+
+import numpy as np
+
+from gym import Env, spaces, utils
+
+from gym.error import DependencyNotInstalled
+
+LEFT = 0
+DOWN = 1
+RIGHT = 2
+UP = 3
+
+AGENT_COLOURS = [
+    np.array([60, 182, 234]),  # Blue
+    np.array([229, 52, 52]),  # Red
+    np.array([144, 32, 249]),  # Purple
+    np.array([69, 196, 60]),  # Green
+    np.array([252, 227, 35]),  # Yellow
+] 
+
+COLOURS = [
+    "red",
+    "blue",
+    "green"
+]
+
+##COPIED FROM FROZENLAKE ENV  WITH REPLACING SIZE BY NROW AND NCOL FOR FINER CONTROL
+
+# DFS to check that it's a valid path.
+def is_valid(board: List[List[str]], max_nrow: int, max_ncol: int) -> bool:
+    frontier, discovered = [], set()
+    frontier.append((0, 0))
+    while frontier:
+        r, c = frontier.pop()
+        if not (r, c) in discovered:
+            discovered.add((r, c))
+            directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+            for x, y in directions:
+                r_new = r + x
+                c_new = c + y
+                if r_new < 0 or r_new >= max_nrow or c_new < 0 or c_new >= max_ncol:
+                    continue
+                if board[r_new][c_new] == "G":
+                    return True
+                if board[r_new][c_new] != "H":
+                    frontier.append((r_new, c_new))
+    return False
+
+##COPIED FROM FROZENLAKE ENV WITH REPLACING SIZE BY NROW AND NCOL FOR FINER CONTROL
+def generate_random_map(nrow: int = 8, ncol: int = 8, p: float = 0.8) -> List[str]:
+    """Generates a random valid map (one that has a path from start to goal)
+    Args:
+        size: size of each side of the grid
+        p: probability that a tile is frozen
+    Returns:
+        A random valid map
+    """
+    valid = False
+    board = []  # initialize to make pyright happy
+
+    while not valid:
+        p = min(1, p)
+        board = np.random.choice(["F", "H"], (nrow, ncol), p=[p, 1 - p])
+        board[0][0] = "S"
+        board[-1][-1] = "G"
+        valid = is_valid(board, nrow, ncol)
+    print(board)
+    print("valid")
+    return ["".join(x) for x in board]
+
+class Agent():
+  def __init__(self, agent_id, state):
+    super(Agent,self).__init__('agent')
+    self.agent_id = agent_id
+    self.dir = state
+  
+  #adapt rendering
+  '''
+  def render(self, img):
+    tri_fn = rendering.point_in_triangle(
+        (0.12, 0.19),
+        (0.87, 0.50),
+        (0.12, 0.81),
+    )
+
+    # Rotate the agent based on its direction
+    tri_fn = rendering.rotate_fn(
+        tri_fn, cx=0.5, cy=0.5, theta=0.5 * math.pi * self.dir)
+    color = AGENT_COLOURS[self.agent_id]
+    rendering.fill_coords(img, tri_fn, color)
+  '''
+
+
+class MultiFrozenLakeEnv(Env):
+    """Frozen lake environment with multi-agent support."""
+
+    def __init__(
+        self,
+        render_mode: Optional[str] = None,
+        desc=None,
+        map_size=8,
+        nrow=None,
+        ncol=None,
+        is_slippery=True,
+        n_agents=3,
+        competitive=False,
+        fixed_environment=False,
+        fully_observed=False,
+        agent_view_size=2,
+        #frozenlake_mode=False,
+        seed=52
+
+    ):
+        self.fully_observed = fully_observed
+
+        # Can't set both map_size and nrow/ncol
+        if map_size:
+          assert nrow is None and ncol is None
+          nrow = map_size
+          ncol = map_size
+        if desc is None: 
+          desc = generate_random_map(nrow, ncol)
+        self.desc = desc = np.asarray(desc, dtype = "c")
+        self.nrow, self.ncol = nrow, ncol = desc.shape
+
+        self.n_agents = n_agents
+        self.competitive = competitive
+
+        if self.n_agents == 1:
+            self.competitive = True
+        
+        #self.actions = 
+
+        self.agent_view_size = agent_view_size
+        if self.fully_observed:
+            self.agent_view_size = max(nrow, ncol)
+
+        # Range of possible rewards
+        self.reward_range = (0, 1)
+
+        nA = 4
+        nS = nrow * ncol
+
+        self.initial_state_distrib = np.array(desc == b"S").astype("float64").ravel()
+        self.initial_state_distrib /= self.initial_state_distrib.sum()
+
+        self.P = {s: {a: [] for a in range(nA)} for s in range(nS)}
+       
+        def to_s(row, col):
+            return row * ncol + col
+
+        def inc(row, col, a):
+            if a == LEFT:
+                col = max(col - 1, 0)
+            elif a == DOWN:
+                row = min(row + 1, nrow - 1)
+            elif a == RIGHT:
+                col = min(col + 1, ncol - 1)
+            elif a == UP:
+                row = max(row - 1, 0)
+            return (row, col)
+
+        def update_probability_matrix(row, col, action):
+            newrow, newcol = inc(row, col, action)
+            newstate = to_s(newrow, newcol)
+            newletter = desc[newrow, newcol]
+            terminated = bytes(newletter) in b"GH"
+            reward = float(newletter == b"G")
+            return newstate, reward, terminated
+
+        for row in range(nrow):
+            for col in range(ncol):
+                s = to_s(row, col)
+                for a in range(4):
+                    li = self.P[s][a]
+                    letter = desc[row, col]
+                    if letter in b"GH":
+                        li.append((1.0, s, 0, True))
+                    else:
+                        if is_slippery:
+                            for b in [(a - 1) % 4, a, (a + 1) % 4]:
+                                li.append(
+                                    (1.0 / 3.0, *update_probability_matrix(row, col, b))
+                                )
+                        else:
+                            li.append((1.0, *update_probability_matrix(row, col, a)))
+
+        # Compute observation and action spaces
+        # Direction always has an extra dimension for tf-agents compatibility
+        self.direction_obs_space = gym.spaces.Box(
+            low=0, high=3, shape=(self.n_agents,), dtype='uint8')
+
+        #self.frozenlake_mode = frozenlake_mode
+        
+        if self.fully_observed:
+            obs_image_shape = (ncol,nrow, 3)
+        else:
+            obs_image_shape = (self.agent_view_size, self.agent_view_size, 3)
+        '''
+        if self.frozenlake_mode: 
+            msg = 'Backwards compatibility with minigrid only possible with 1 agent'
+            assert self.n_agents == 1, msg
+
+            # Single agent case
+            self.action_space = gym.spaces.Discrete(len(self.actions))
+            #self.observation_space = gym.spaces.Discrete(nrow * ncol)
+
+            # Images have three dimensions
+            self.image_obs_space = gym.spaces.Box(
+                low=0,
+                high=255,
+                shape=obs_image_shape,
+                dtype='uint8')
+               
+        else:
+          '''
+        self.action_space = gym.spaces.Box(low=0, high=nA-1,
+                                        shape=(self.n_agents,), dtype='int64')
+
+        self.image_obs_space = gym.spaces.Box(
+          low=0,
+          high=255,
+          shape=(self.n_agents,) + obs_image_shape,
+          dtype='uint8')
+
+        # Observations are dictionaries containing an encoding of the grid and the
+        # agent's direction
+        observation_space = {'image': self.image_obs_space,
+                            'direction': self.direction_obs_space}
+        if self.fully_observed:
+            self.position_obs_space = gym.spaces.Box(low=0,
+                                                high=max(nrow, ncol),
+                                                shape=(self.n_agents, 2),
+                                                dtype='uint8')
+            observation_space['position'] = self.position_obs_space
+        self.observation_space = gym.spaces.Dict(observation_space)
+
+        # Environment configuration
+        self.nrow = nrow
+        self.ncol = ncol
+        self.render_mode = render_mode
+
+        #current position and direction of agents
+        self.agent_pos = [None] * self.n_agents
+        self.agent_dir = [None] * self.n_agents
+
+        # Maintain a done variable for each agent
+        self.done = [False] * self.n_agents
+        
+        # pygame utils
+        self.window_size = (min(64 * ncol, 512), min(64 * nrow, 512))
+        self.cell_size = (
+            self.window_size[0] // self.ncol,
+            self.window_size[1] // self.nrow,
+        )
+        self.window_surface = None
+        self.clock = None
+        self.hole_img = None
+        self.cracked_hole_img = None
+        self.ice_img = None
+        self.elf_images = None
+        self.goal_img = None
+        self.start_img = None
+
+        self.seed_value = seed
+        self.seed(seed=seed)
+        self.fixed_environment = fixed_environment
+        #Initialize the state
+        self.reset()
+
+    def reset(self,
+              *,
+              seed: Optional[int] = None,
+              options: Optional[dict] = None):
+        if self.fixed_environment:
+           self.seed(self.seed_value)
+
+        # Current position and direction of the agent
+        self.agent_pos = [None] * self.n_agents
+        #self.agent_dir = [None] * self.n_agents
+        self.done = [False] * self.n_agents
+
+        #generate_random_map(self.nrow, self.ncol) # oder _gen_map controlled by adversary
+        #doesnt work because agent pos not setted with map creation, lieber gen map function die place agent aufruft
+        '''
+        for a in range(self.n_agents):
+          assert self.agent_pos[a] is not None
+          assert self.agent_dir[a] is not None
+        '''
+        for a in range(self.n_agents):
+          self.agent_pos[a] = categorical_sample(self.initial_state_distrib, self.np_random)
+        self.lastaction = [None]*self.n_agents
+
+        if self.render_mode == "human":
+            self.render()
+        return self.agent_pos#, {"prob": 1}
+        #obse = self.gen_obs()
+
+        #return obs
+    def step_one_agent(self, a, agent_id):
+        transitions = self.P[self.agent_pos[agent_id]][a]
+        i = categorical_sample([t[0] for t in transitions], self.np_random)
+        p, pos, r, t = transitions[i]
+        agent_blocking = False
+        for a in range(self.n_agents):
+          if a != agent_id and np.array_equal(self.agent_pos[a], pos):
+            agent_blocking = True
+            r = 0
+        if not agent_blocking:
+          self.agent_pos[agent_id] = pos
+          self.lastaction[agent_id] = a
+
+        if self.render_mode == "human":
+            self.render()
+        return r #(int(s), r, t, False, {"prob": p})
+
+    def step(self, actions):
+      print(self.agent_pos)
+
+      rewards = [0] * self.n_agents
+
+      # Randomize order in which agents act for fairness
+      agent_ordering = np.arange(self.n_agents)
+      np.random.shuffle(agent_ordering)
+
+      # Step each agent
+      for a in agent_ordering:
+        rewards[a] = self.step_one_agent(actions[a], a)
+
+      #obs = self.gen_obs()
+
+      collective_done = False
+      # In competitive version, if one agent finishes the episode is over.
+      if self.competitive:
+        collective_done = np.sum(self.done) >= 1 ## WO WIRD SELF.DONE GESETZT?
+
+      # Running out of time applies to all agents
+     # if self.step_count >= self.max_steps:
+      #  collective_done = True
+      print(self.agent_pos)
+      return self.agent_pos, rewards, collective_done, {}
+    
+    
+
+
+    """
+    def reset2(self):
+        if self.fixed_environment:
+           self.seed(self.seed_value)
+
+        # Current position and direction of the agent
+        self.agent_pos = [None] * self.n_agents
+        self.agent_dir = [None] * self.n_agents
+        self.done = [False] * self.n_agents
+
+        frozen_lake._gen_map()
+          # These fields should be defined by _gen_map
+        for a in range(self.n_agents):
+            assert self.agent_pos[a] is not None
+            assert self.agent_dir[a] is not None
+
+            # Check that the agent doesn't overlap with a hole ## implement place agent first!
+           # start_cell = self.grid.get(*self.agent_pos[a])
+            #assert (start_cell.type == 'agent' or
+                 #   start_cell is None or start_cell.can_overlap())
+        #self.agent_pos= categorical_sample(self.initial_state_distrib, self.np_random)
+        self.lastaction = None
+
+        if self.render_mode == "human":
+            self.render()
+        return int(self.s), {"prob": 1}
+    
+    @abstractmethod
+    def _gen_map(self, nrow, ncol): # needs to be implemented in adversary
+        pass
+    """
+    def place_agent(self, top=None, size=None, rand_dir=True, max_tries=math.inf):
+      """Set the starting point of all agents in the world.
+      Name chosen for backwards compatibility.
+      Args:
+        top: (x,y) position of the top-left corner of rectangle where agents can
+          be placed.
+        size: Size of the rectangle where to place.
+        rand_dir: Choose a random direction for agents.
+        max_tries: Throw an error if a position can't be found after this many
+          tries.
+      """
+      for a in range(self.n_agents):
+          self.place_one_agent(
+              a, top=top, size=size, rand_dir=rand_dir, max_tries=math.inf)
+    def place_one_agent(self,
+                      agent_id,
+                      top=None,
+                      size=None,
+                      rand_dir=True,
+                      max_tries=math.inf,
+                      agent_obj=None):
+      """Set the agent's starting point at an empty position in the map."""
+
+      self.agent_pos[agent_id] = None
+      pos = self.place_obj(None, top, size, max_tries=max_tries)
+
+      self.place_agent_at_pos(agent_id, pos, agent_obj=agent_obj,
+                              rand_dir=rand_dir)
+
+      return pos
+
+    def render(self):
+        if self.render_mode == "ansi":
+            print("Rendering:")
+            return self._render_text()
+        else:  # self.render_mode in {"human", "rgb_array"}:
+            return self._render_gui(self.render_mode)
+
+    def _render_gui(self, mode):
+        try:
+            import pygame
+        except ImportError:
+            raise DependencyNotInstalled(
+                "pygame is not installed, run `pip install gym[toy_text]`"
+            )
+
+        if self.window_surface is None:
+            pygame.init()
+
+            if mode == "human":
+                pygame.display.init()
+                pygame.display.set_caption("Frozen Lake")
+                self.window_surface = pygame.display.set_mode(self.window_size)
+            elif mode == "rgb_array":
+                self.window_surface = pygame.Surface(self.window_size)
+
+        assert (
+            self.window_surface is not None
+        ), "Something went wrong with pygame. This should never happen."
+
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+        if self.hole_img is None:
+            file_name = path.join(path.dirname(__file__), "img/hole.png")
+            self.hole_img = pygame.transform.scale(
+                pygame.image.load(file_name), self.cell_size
+            )
+        if self.cracked_hole_img is None:
+            file_name = path.join(path.dirname(__file__), "img/cracked_hole.png")
+            self.cracked_hole_img = pygame.transform.scale(
+                pygame.image.load(file_name), self.cell_size
+            )
+        if self.ice_img is None:
+            file_name = path.join(path.dirname(__file__), "img/ice.png")
+            self.ice_img = pygame.transform.scale(
+                pygame.image.load(file_name), self.cell_size
+            )
+        if self.goal_img is None:
+            file_name = path.join(path.dirname(__file__), "img/goal.png")
+            self.goal_img = pygame.transform.scale(
+                pygame.image.load(file_name), self.cell_size
+            )
+        if self.start_img is None:
+            file_name = path.join(path.dirname(__file__), "img/stool.png")
+            self.start_img = pygame.transform.scale(
+                pygame.image.load(file_name), self.cell_size
+            )
+        if self.elf_images is None:
+            elfs = [
+                path.join(path.dirname(__file__), "img/elf_left.png"),
+                path.join(path.dirname(__file__), "img/elf_down.png"),
+                path.join(path.dirname(__file__), "img/elf_right.png"),
+                path.join(path.dirname(__file__), "img/elf_up.png"),
+            ]
+            self.elf_images = [
+                pygame.transform.scale(pygame.image.load(f_name), self.cell_size)
+                for f_name in elfs
+            ]
+
+        desc = self.desc.tolist()
+        assert isinstance(desc, list), f"desc should be a list or an array, got {desc}"
+        for y in range(self.nrow):
+            for x in range(self.ncol):
+                pos = (x * self.cell_size[0], y * self.cell_size[1])
+                rect = (*pos, *self.cell_size)
+
+                self.window_surface.blit(self.ice_img, pos)
+                if desc[y][x] == b"H":
+                    self.window_surface.blit(self.hole_img, pos)
+                elif desc[y][x] == b"G":
+                    self.window_surface.blit(self.goal_img, pos)
+                elif desc[y][x] == b"S":
+                    self.window_surface.blit(self.start_img, pos)
+
+                pygame.draw.rect(self.window_surface, (180, 200, 230), rect, 1)
+
+        # paint the elfs
+        
+        for a in range(self.n_agents):
+          bot_row, bot_col = self.agent_pos[a] // self.ncol, self.agent_pos[a] % self.ncol
+          cell_rect = (bot_col * self.cell_size[0], bot_row * self.cell_size[1])
+          last_action = self.lastaction[a] if self.lastaction[a] is not None else 1
+          elf_img = self.elf_images[last_action]
+
+          if desc[bot_row][bot_col] == b"H":
+              self.window_surface.blit(self.cracked_hole_img, cell_rect)
+          else:
+              self.window_surface.blit(elf_img, cell_rect)
+    
+        if mode == "human":
+            pygame.event.pump()
+            pygame.display.update()
+            self.clock.tick(1)#self.metadata["render_fps"])
+        elif mode == "rgb_array":
+            return np.transpose(
+                np.array(pygame.surfarray.pixels3d(self.window_surface)), axes=(1, 0, 2)
+            )
+
+    @staticmethod
+    def _center_small_rect(big_rect, small_dims):
+        offset_w = (big_rect[2] - small_dims[0]) / 2
+        offset_h = (big_rect[3] - small_dims[1]) / 2
+        return (
+            big_rect[0] + offset_w,
+            big_rect[1] + offset_h,
+        )
+
+    def _render_text(self):
+        desc = self.desc.tolist()
+        outfile = StringIO()
+        row = [None] * self.n_agents
+        col = [None] * self.n_agents
+        for a in range(self.n_agents):
+          row[a], col[a] = self.agent_pos[a] // self.ncol, self.agent_pos[a] % self.ncol
+        desc = [[c.decode("utf-8") for c in line] for line in desc]
+        print("desc2")
+        print(desc)
+        for a in range(self.n_agents):
+          print(COLOURS[a])
+          desc[row[a]][col[a]] = utils.colorize(desc[row[a]][col[a]], COLOURS[a], highlight=True)
+          
+          if self.lastaction[a] is not None:
+              outfile.write(f"Agent {a}: ({['Left', 'Down', 'Right', 'Up'][self.lastaction[a]]})\n")
+          else:
+              outfile.write("\n")
+        outfile.write("\n".join("".join(line) for line in desc) + "\n")
+
+        with closing(outfile):
+            return outfile.getvalue()
+
+if __name__=="__main__":
+    fl = MultiFrozenLakeEnv(render_mode='ansi', is_slippery = False)
+    #print(fl.desc)
+    fl.reset()
+    fl.step([LEFT, DOWN, LEFT])
+    fl.step([RIGHT, DOWN, LEFT])
+    fl.step([RIGHT, DOWN, LEFT])
+    fl.step([RIGHT, DOWN, LEFT])
+    #print(fl.action_space)
+    #print(fl.desc)
+    fl.render()
