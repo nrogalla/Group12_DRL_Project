@@ -76,6 +76,15 @@ def generate_random_map(nrow: int = 8, ncol: int = 8, p: float = 0.8) -> List[st
     print("valid")
     return ["".join(x) for x in board]
 
+def generate_empty_map(nrow: int = 8, ncol: int = 8):
+    assert ncol >= 3
+    assert nrow >= 3
+
+    #self.nrow = nrow
+    #self.ncol = ncol
+
+    return [None] * nrow * ncol
+
 class Agent():
   def __init__(self, agent_id, state):
     super(Agent,self).__init__('agent')
@@ -249,8 +258,13 @@ class MultiFrozenLakeEnv(Env):
         self.render_mode = render_mode
 
         #current position and direction of agents
-        self.agent_pos = [None] * self.n_agents
-        self.agent_dir = [None] * self.n_agents
+        self.agent_pos = [[None, None]] * self.n_agents
+        print(self.agent_pos)
+        for a in range(self.n_agents):
+            self.agent_pos[a][0] = 0
+            self.agent_pos[a][1] = 0
+        print(self.agent_pos)
+        #self.agent_dir = [None] * self.n_agents
 
         # Maintain a done variable for each agent
         self.done = [False] * self.n_agents
@@ -284,7 +298,7 @@ class MultiFrozenLakeEnv(Env):
            self.seed(self.seed_value)
 
         # Current position and direction of the agent
-        self.agent_pos = [None] * self.n_agents
+        self.agent_pos = [[None, None]] * self.n_agents
         #self.agent_dir = [None] * self.n_agents
         self.done = [False] * self.n_agents
 
@@ -296,7 +310,10 @@ class MultiFrozenLakeEnv(Env):
           assert self.agent_dir[a] is not None
         '''
         for a in range(self.n_agents):
-          self.agent_pos[a] = categorical_sample(self.initial_state_distrib, self.np_random)
+            pos = categorical_sample(self.initial_state_distrib, self.np_random)
+            print(self.agent_pos)
+            self.agent_pos[a][0] = pos // self.ncol
+            self.agent_pos[a][1] = pos % self.ncol
         self.lastaction = [None]*self.n_agents
 
         if self.render_mode == "human":
@@ -306,16 +323,18 @@ class MultiFrozenLakeEnv(Env):
 
         #return obs
     def step_one_agent(self, a, agent_id):
-        transitions = self.P[self.agent_pos[agent_id]][a]
+        transitions = self.P[self.agent_pos[agent_id][0]*self.ncol + self.agent_pos[agent_id][1]][a]
         i = categorical_sample([t[0] for t in transitions], self.np_random)
         p, pos, r, t = transitions[i]
+        posit = [None] *2
+        posit[0],posit[1] = pos // self.ncol, pos % self.ncol
         agent_blocking = False
         for a in range(self.n_agents):
-          if a != agent_id and np.array_equal(self.agent_pos[a], pos):
+          if a != agent_id and np.array_equal(self.agent_pos[a], posit):
             agent_blocking = True
             r = 0
         if not agent_blocking:
-          self.agent_pos[agent_id] = pos
+          self.agent_pos[agent_id] = posit
           self.lastaction[agent_id] = a
 
         if self.render_mode == "human":
@@ -323,7 +342,6 @@ class MultiFrozenLakeEnv(Env):
         return r #(int(s), r, t, False, {"prob": p})
 
     def step(self, actions):
-      print(self.agent_pos)
 
       rewards = [0] * self.n_agents
 
@@ -349,40 +367,77 @@ class MultiFrozenLakeEnv(Env):
       return self.agent_pos, rewards, collective_done, {}
     
     
-
-
     """
-    def reset2(self):
-        if self.fixed_environment:
-           self.seed(self.seed_value)
-
-        # Current position and direction of the agent
-        self.agent_pos = [None] * self.n_agents
-        self.agent_dir = [None] * self.n_agents
-        self.done = [False] * self.n_agents
-
-        frozen_lake._gen_map()
-          # These fields should be defined by _gen_map
-        for a in range(self.n_agents):
-            assert self.agent_pos[a] is not None
-            assert self.agent_dir[a] is not None
-
-            # Check that the agent doesn't overlap with a hole ## implement place agent first!
-           # start_cell = self.grid.get(*self.agent_pos[a])
-            #assert (start_cell.type == 'agent' or
-                 #   start_cell is None or start_cell.can_overlap())
-        #self.agent_pos= categorical_sample(self.initial_state_distrib, self.np_random)
-        self.lastaction = None
-
-        if self.render_mode == "human":
-            self.render()
-        return int(self.s), {"prob": 1}
-    
     @abstractmethod
     def _gen_map(self, nrow, ncol): # needs to be implemented in adversary
         pass
     """
-    def place_agent(self, top=None, size=None, rand_dir=True, max_tries=math.inf):
+    def place_obj(self,
+                    obj,
+                    top=None,
+                    size=None,
+                    max_tries=math.inf):
+        """Place an object at an empty position in the map.
+        Args:
+        obj: "H", "F", "G" or Agentnumber depending on the object to be placed
+        top: (x,y) position of the top-left corner of rectangle where to place.
+        size: Size of the rectangle where to place.
+        max_tries: Throw an error if a position can't be found after this many
+            tries.
+        Returns:
+        Position where object was placed.
+        """
+        if top is None:
+            top = (0, 0)
+        else:
+            top = (max(top[0], 0), max(top[1], 0))
+
+        if size is None:
+            size = (self.ncol, self.nrow)
+
+        num_tries = 0
+
+        while True:
+            # This is to handle with rare cases where rejection sampling
+            # gets stuck in an infinite loop
+            if num_tries > max_tries:
+                raise gym.error.RetriesExceededError(
+                    'Rejection sampling failed in place_obj')
+
+            num_tries += 1
+
+            pos = np.array((self._rand_int(top[0],
+                                            min(top[0] + size[0], self.ncol)),
+                            self._rand_int(top[1],
+                                            min(top[1] + size[1], self.nrow))))
+
+            # Don't place the object on top of another object
+            if self.desc[pos[0]][pos[1]] is not None:
+                continue
+            # ALREADY CHECKED THROUGH NONE_CHECK
+            # Don't place the object where the agent is
+            #pos_no_good = False
+            #for a in range(self.n_agents):
+            #    if np.array_equal(pos, self.agent_pos[a]):
+            #    pos_no_good = True
+            #if pos_no_good:
+            #    continue
+
+            # Check if there is a filtering criterion
+            #if reject_fn and reject_fn(self, pos):
+             #   continue
+
+            break
+
+        self.desc[pos[0]][pos[1]] = obj
+
+        #if obj is not None:
+        #obj.init_pos = pos
+        #obj.cur_pos = pos
+
+        return pos
+
+    def place_agent(self, top=None, size=None, max_tries=math.inf):
       """Set the starting point of all agents in the world.
       Name chosen for backwards compatibility.
       Args:
@@ -395,21 +450,17 @@ class MultiFrozenLakeEnv(Env):
       """
       for a in range(self.n_agents):
           self.place_one_agent(
-              a, top=top, size=size, rand_dir=rand_dir, max_tries=math.inf)
+              a, top=top, size=size, max_tries=math.inf)
+
     def place_one_agent(self,
                       agent_id,
                       top=None,
                       size=None,
-                      rand_dir=True,
-                      max_tries=math.inf,
-                      agent_obj=None):
+                      max_tries=math.inf):
       """Set the agent's starting point at an empty position in the map."""
 
       self.agent_pos[agent_id] = None
-      pos = self.place_obj(None, top, size, max_tries=max_tries)
-
-      self.place_agent_at_pos(agent_id, pos, agent_obj=agent_obj,
-                              rand_dir=rand_dir)
+      pos = self.place_obj(str(agent_id), top, size, max_tries=max_tries)
 
       return pos
 
@@ -464,11 +515,13 @@ class MultiFrozenLakeEnv(Env):
             self.goal_img = pygame.transform.scale(
                 pygame.image.load(file_name), self.cell_size
             )
+        
         if self.start_img is None:
             file_name = path.join(path.dirname(__file__), "img/stool.png")
             self.start_img = pygame.transform.scale(
                 pygame.image.load(file_name), self.cell_size
             )
+    
         if self.elf_images is None:
             elfs = [
                 path.join(path.dirname(__file__), "img/elf_left.png"),
@@ -501,7 +554,7 @@ class MultiFrozenLakeEnv(Env):
         # paint the elfs
         
         for a in range(self.n_agents):
-          bot_row, bot_col = self.agent_pos[a] // self.ncol, self.agent_pos[a] % self.ncol
+          bot_row, bot_col = self.agent_pos[a][0], self.agent_pos[a][1]
           cell_rect = (bot_col * self.cell_size[0], bot_row * self.cell_size[1])
           last_action = self.lastaction[a] if self.lastaction[a] is not None else 1
           elf_img = self.elf_images[last_action]
@@ -535,7 +588,7 @@ class MultiFrozenLakeEnv(Env):
         row = [None] * self.n_agents
         col = [None] * self.n_agents
         for a in range(self.n_agents):
-          row[a], col[a] = self.agent_pos[a] // self.ncol, self.agent_pos[a] % self.ncol
+          row[a], col[a] = self.agent_pos[a][0], self.agent_pos[a][1]
         desc = [[c.decode("utf-8") for c in line] for line in desc]
         print("desc2")
         print(desc)
@@ -553,7 +606,7 @@ class MultiFrozenLakeEnv(Env):
             return outfile.getvalue()
 
 if __name__=="__main__":
-    fl = MultiFrozenLakeEnv(render_mode='ansi', is_slippery = False)
+    fl = MultiFrozenLakeEnv(render_mode='human', is_slippery = False)
     #print(fl.desc)
     fl.reset()
     fl.step([LEFT, DOWN, LEFT])
@@ -562,4 +615,4 @@ if __name__=="__main__":
     fl.step([RIGHT, DOWN, LEFT])
     #print(fl.action_space)
     #print(fl.desc)
-    fl.render()
+    #fl.render()
