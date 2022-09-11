@@ -125,6 +125,7 @@ class MultiFrozenLakeEnv(Env):
         fully_observed=False,
         agent_view_size=2,
         #frozenlake_mode=False,
+        max_steps=200,
         seed=52
 
     ):
@@ -132,17 +133,18 @@ class MultiFrozenLakeEnv(Env):
 
         # Can't set both map_size and nrow/ncol
         if map_size:
-          assert nrow is None and ncol is None
-          nrow = map_size
-          ncol = map_size
+            assert nrow is None and ncol is None
+            nrow = map_size
+            ncol = map_size
         if desc is None: 
-          desc = generate_random_map(nrow, ncol)
+              desc = generate_random_map(nrow, ncol)
         self.desc = desc = np.asarray(desc, dtype = "c")
         self.nrow, self.ncol = nrow, ncol = desc.shape
 
         self.n_agents = n_agents
         self.competitive = competitive
-
+        self.max_steps = max_steps
+        
         if self.n_agents == 1:
             self.competitive = True
         
@@ -285,17 +287,14 @@ class MultiFrozenLakeEnv(Env):
         self.start_img = None
 
         self.seed_value = seed
-        self.seed(seed=seed)
+        self.seed = seed
         self.fixed_environment = fixed_environment
         #Initialize the state
         self.reset()
 
-    def reset(self,
-              *,
-              seed: Optional[int] = None,
-              options: Optional[dict] = None):
+    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         if self.fixed_environment:
-           self.seed(self.seed_value)
+            self.seed(self.seed_value)
 
         # Current position and direction of the agent
         self.agent_pos = [[None, None]] * self.n_agents
@@ -330,12 +329,12 @@ class MultiFrozenLakeEnv(Env):
         posit[0],posit[1] = pos // self.ncol, pos % self.ncol
         agent_blocking = False
         for a in range(self.n_agents):
-          if a != agent_id and np.array_equal(self.agent_pos[a], posit):
-            agent_blocking = True
-            r = 0
+            if a != agent_id and np.array_equal(self.agent_pos[a], posit):
+                agent_blocking = True
+                r = 0
         if not agent_blocking:
-          self.agent_pos[agent_id] = posit
-          self.lastaction[agent_id] = a
+            self.agent_pos[agent_id] = posit
+            self.lastaction[agent_id] = a
 
         if self.render_mode == "human":
             self.render()
@@ -343,28 +342,28 @@ class MultiFrozenLakeEnv(Env):
 
     def step(self, actions):
 
-      rewards = [0] * self.n_agents
+        rewards = [0] * self.n_agents
 
-      # Randomize order in which agents act for fairness
-      agent_ordering = np.arange(self.n_agents)
-      np.random.shuffle(agent_ordering)
+        # Randomize order in which agents act for fairness
+        agent_ordering = np.arange(self.n_agents)
+        np.random.shuffle(agent_ordering)
 
-      # Step each agent
-      for a in agent_ordering:
-        rewards[a] = self.step_one_agent(actions[a], a)
+        # Step each agent
+        for a in agent_ordering:
+            rewards[a] = self.step_one_agent(actions[a], a)
 
-      #obs = self.gen_obs()
+        #obs = self.gen_obs()
 
-      collective_done = False
-      # In competitive version, if one agent finishes the episode is over.
-      if self.competitive:
-        collective_done = np.sum(self.done) >= 1 ## WO WIRD SELF.DONE GESETZT?
+        collective_done = False
+        # In competitive version, if one agent finishes the episode is over.
+        if self.competitive:
+            collective_done = np.sum(self.done) >= 1 ## WO WIRD SELF.DONE GESETZT?
 
-      # Running out of time applies to all agents
-     # if self.step_count >= self.max_steps:
-      #  collective_done = True
-      print(self.agent_pos)
-      return self.agent_pos, rewards, collective_done, {}
+        # Running out of time applies to all agents
+        # if self.step_count >= self.max_steps:
+        #  collective_done = True
+        print(self.agent_pos)
+        return self.agent_pos, rewards, collective_done, {}
     
     
     """
@@ -401,8 +400,7 @@ class MultiFrozenLakeEnv(Env):
             # This is to handle with rare cases where rejection sampling
             # gets stuck in an infinite loop
             if num_tries > max_tries:
-                raise gym.error.RetriesExceededError(
-                    'Rejection sampling failed in place_obj')
+                raise gym.error.RetriesExceededError('Rejection sampling failed in place_obj')
 
             num_tries += 1
 
@@ -438,31 +436,30 @@ class MultiFrozenLakeEnv(Env):
         return pos
 
     def place_agent(self, top=None, size=None, max_tries=math.inf):
-      """Set the starting point of all agents in the world.
-      Name chosen for backwards compatibility.
-      Args:
-        top: (x,y) position of the top-left corner of rectangle where agents can
+        """Set the starting point of all agents in the world.
+        Name chosen for backwards compatibility.
+        Args:
+          top: (x,y) position of the top-left corner of rectangle where agents can
           be placed.
-        size: Size of the rectangle where to place.
-        rand_dir: Choose a random direction for agents.
-        max_tries: Throw an error if a position can't be found after this many
-          tries.
-      """
-      for a in range(self.n_agents):
-          self.place_one_agent(
-              a, top=top, size=size, max_tries=math.inf)
+          size: Size of the rectangle where to place.
+          rand_dir: Choose a random direction for agents.
+          max_tries: Throw an error if a position can't be found after this many
+            tries.
+        """
+        for a in range(self.n_agents):
+            self.place_one_agent(a, top=top, size=size, max_tries=math.inf)
 
     def place_one_agent(self,
                       agent_id,
                       top=None,
                       size=None,
                       max_tries=math.inf):
-      """Set the agent's starting point at an empty position in the map."""
+        """Set the agent's starting point at an empty position in the map."""
 
-      self.agent_pos[agent_id] = None
-      pos = self.place_obj(str(agent_id), top, size, max_tries=max_tries)
+        self.agent_pos[agent_id] = None
+        pos = self.place_obj(str(agent_id), top, size, max_tries=max_tries)
 
-      return pos
+        return pos
 
     def render(self):
         if self.render_mode == "ansi":
@@ -475,9 +472,7 @@ class MultiFrozenLakeEnv(Env):
         try:
             import pygame
         except ImportError:
-            raise DependencyNotInstalled(
-                "pygame is not installed, run `pip install gym[toy_text]`"
-            )
+            raise DependencyNotInstalled("pygame is not installed, run `pip install gym[toy_text]`")
 
         if self.window_surface is None:
             pygame.init()
@@ -554,15 +549,15 @@ class MultiFrozenLakeEnv(Env):
         # paint the elfs
         
         for a in range(self.n_agents):
-          bot_row, bot_col = self.agent_pos[a][0], self.agent_pos[a][1]
-          cell_rect = (bot_col * self.cell_size[0], bot_row * self.cell_size[1])
-          last_action = self.lastaction[a] if self.lastaction[a] is not None else 1
-          elf_img = self.elf_images[last_action]
+            bot_row, bot_col = self.agent_pos[a][0], self.agent_pos[a][1]
+            cell_rect = (bot_col * self.cell_size[0], bot_row * self.cell_size[1])
+            last_action = self.lastaction[a] if self.lastaction[a] is not None else 1
+            elf_img = self.elf_images[last_action]
 
-          if desc[bot_row][bot_col] == b"H":
-              self.window_surface.blit(self.cracked_hole_img, cell_rect)
-          else:
-              self.window_surface.blit(elf_img, cell_rect)
+            if desc[bot_row][bot_col] == b"H":
+                self.window_surface.blit(self.cracked_hole_img, cell_rect)
+            else:
+                self.window_surface.blit(elf_img, cell_rect)
     
         if mode == "human":
             pygame.event.pump()
