@@ -29,10 +29,10 @@ import gym
 #import networkx as nx
 #from networkx import map_graph
 import numpy as np
-#import sys
-#sys.path.append('../Group12_DRL_Project')
+import sys
+sys.path.insert(0, '..')
 
-from Group12_DRL_Project.gym_multifrozenlake import multifrozenlake
+import multifrozenlake 
 
 
 class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
@@ -66,6 +66,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     self.goal_noise = goal_noise
     self.random_z_dim = random_z_dim
     self.choose_goal_last = choose_goal_last
+    self.width = self.height = size
 
     # Add two actions for placing the agent and goal.
     self.adversary_max_steps = self.n_holes + 2
