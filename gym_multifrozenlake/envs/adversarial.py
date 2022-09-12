@@ -24,14 +24,16 @@ Has additional functions, step_adversary, and reset_agent. How to use:
    adversary designed it. A new agent can now play it using the step() function.
 """
 import random
-
+from typing import List, Optional
 import gym
 #import networkx as nx
 #from networkx import map_graph
 import numpy as np
 import sys
-sys.path.insert(0, '..')
+#import os
 
+#sys.path.insert(0, '..'))
+sys.path.insert(0, 'c:\\Users\\Nicole\\Documents\\UNI\\Cognitive_Science\\DRL\\PAIRED-Project\\Group12_DRL_Project\\gym_multifrozenlake')
 import multifrozenlake 
 
 
@@ -42,8 +44,8 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
   chooses where the next item should be placed.
   """
 
-  def __init__(self, n_holes=50, size=15, agent_view_size=5, max_steps=250,
-               goal_noise=0., random_z_dim=50, choose_goal_last=False):
+  def __init__(self, n_holes=50, size=8, agent_view_size=5, max_steps=250,
+               goal_noise=0., random_z_dim=50, choose_goal_last=False, render_mode: Optional[str] = None):
     """Initializes environment in which adversary places goal, agent, obstacles.
     Args:
       n_holes: The maximum number of obstacles the adversary can place.
@@ -60,13 +62,13 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
       choose_goal_last: If True, will place the goal and agent as the last
         actions, rather than the first actions.
     """
-    self.agent_start_pos = None
+   # self.agent_start_pos = None
     self.goal_pos = None
     self.n_holes = n_holes
     self.goal_noise = goal_noise
     self.random_z_dim = random_z_dim
     self.choose_goal_last = choose_goal_last
-    self.width = self.height = size
+    self.ncol = self.nrow = size
 
     # Add two actions for placing the agent and goal.
     self.adversary_max_steps = self.n_holes + 2
@@ -77,13 +79,14 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
         max_steps=max_steps,
         agent_view_size=agent_view_size,
         competitive=True,
+        render_mode = render_mode
     )
 
     # Metrics
     self.reset_metrics()
 
     # Create spaces for adversary agent's specs.
-    self.adversary_action_dim = (size - 2)**2
+    self.adversary_action_dim = (size)**2
     self.adversary_action_space = gym.spaces.Discrete(self.adversary_action_dim)
     self.adversary_ts_obs_space = gym.spaces.Box(
         low=0, high=self.adversary_max_steps, shape=(1,), dtype='uint8')
@@ -92,7 +95,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     self.adversary_image_obs_space = gym.spaces.Box(
         low=0,
         high=255,
-        shape=(self.width, self.height, 3),
+        shape=(self.ncol, self.nrow, 3),
         dtype='uint8')
 
     # Adversary observations are dictionaries containing an encoding of the
@@ -107,13 +110,12 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     #self.graph = map_graph(dim=[size-2, size-2])
     self.hole_locs = []
 
-  def _gen_map(self, width, height):
+  def _gen_map(self, ncol, nrow):
     """map is initially empty, because adversary will create it."""
     # Create an empty map
-    self.map = multifrozenlake.generate_empty_map(width, height)
-
-    # Generate the surrounding walls
-    #self.map.wall_rect(0, 0, width, height)
+    self.map = multifrozenlake.generate_empty_map(ncol, nrow)
+    
+    return self.map
 
   def get_goal_x(self):
     if self.goal_pos is None:
@@ -130,22 +132,24 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     self.n_holes_placed = 0
     self.deliberate_agent_placement = -1
     self.passable = -1
-    self.shortest_path_length = (self.width - 2) * (self.height - 2) + 1
+    self.shortest_path_length = (self.ncol - 2) * (self.nrow - 2) + 1
 
   def reset(self):
     """Fully resets the environment to an empty map with no agent or goal."""
-    #self.graph = map_graph(dim=[self.width-2, self.height-2])
+    #self.graph = map_graph(dim=[self.ncol-2, self.nrow-2])
+    #self.P = {s: {a: [] for a in range(4)} for s in range(self.nrow*self.ncol)}
     self.hole_locs = []
 
     self.step_count = 0
     self.adversary_step_count = 0
+    self.lastaction = [None]*self.n_agents
 
     #self.agent_start_dir = self._rand_int(0, 4)
 
     # Current position and direction of the agent
     self.reset_agent_status()
 
-    self.agent_start_pos = None
+    #self.agent_start_pos = None
     self.goal_pos = None
 
     # Extra metrics
@@ -153,7 +157,8 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
 
     # Generate the map. Will be random by default, or same environment if
     # 'fixed_environment' is True.
-    self._gen_map(self.width, self.height)
+    self._gen_map(self.ncol, self.nrow)
+     # adapt for is slippery
 
     #image = self.map.encode()
     obs = {
@@ -162,6 +167,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
         'time_step': [self.adversary_step_count],
         'random_z': self.generate_random_z()
     }
+    
 
     return obs
 
@@ -171,20 +177,20 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     #self.agent_dir = [self.agent_start_dir] * self.n_agents
     self.done = [False] * self.n_agents
 
-  def reset_agent(self):
+  def reset_agent(self, agent_id):
     """Resets the agent's start position, but leaves goal and holes."""
     # Remove the previous agents from the world
-    for a in range(self.n_agents):
-      if self.agent_pos[a] is not None:
-        self.map[self.agent_pos[a][0]][self.agent_pos[a][1]] = None
+    #for a in range(self.n_agents):
+    if self.agent_pos[agent_id] is not None:
+      self.map[self.agent_pos[agent_id][0]][self.agent_pos[agent_id][1]] = None
 
     # Current position and direction of the agent
     self.reset_agent_status()
 
-    if self.agent_start_pos is None:
+    if self.agent_pos[agent_id] is None:
       raise ValueError('Trying to place agent at empty start position.')
     else:
-      self.map[self.agent_start_pos[0]][self.agent_start_pos[1]] = str(0)
+      self.map[self.agent_pos[agent_id][0]][self.agent_pos[agent_id][1]] = str(0)
 
     for a in range(self.n_agents):
       assert self.agent_pos[a] is not None
@@ -211,13 +217,13 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     if obj is not None and obj.type == 'wall':
       self.map.set(x, y, None)
   '''
-  def compute_shortest_path(self):
-    if self.agent_start_pos is None or self.goal_pos is None:
+  def compute_shortest_path(self, agent_id):
+    if self.agent_pos is None or self.goal_pos is None:
       return
 
     self.distance_to_goal = abs(
-        self.goal_pos[0] - self.agent_start_pos[0]) + abs(
-            self.goal_pos[1] - self.agent_start_pos[1])
+        self.goal_pos[agent_id][0] - self.agent_pos[agent_id][0]) + abs(
+            self.goal_pos[agent_id][1] - self.agent_pos[agent_id][1])
 
     # Check if there is a path between agent start position and goal. Remember
     # to subtract 1 due to outside walls existing in the map, but not in the
@@ -240,7 +246,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     else:
       # Impassable environments have a shortest path length 1 longer than
       # longest possible path
-      self.shortest_path_length = (self.width - 2) * (self.height - 2) + 1
+      self.shortest_path_length = (self.ncol - 2) * (self.nrow - 2) + 1
 
   def generate_random_z(self):
     return np.random.uniform(size=(self.random_z_dim,)).astype(np.float32)
@@ -255,12 +261,12 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     Returns:
       Standard RL observation, reward (always 0), done, and info
     """
+    
     if loc >= self.adversary_action_dim:
       raise ValueError('Position passed to step_adversary is outside the map.')
 
-    
-    x = int(loc % (self.ncol - 2))
-    y = int(loc / (self.ncol - 2))
+    x = int(loc / (self.ncol))
+    y = int(loc % (self.ncol))
     done = False
 
     if self.choose_goal_last:
@@ -273,26 +279,23 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     # Place goal
     if should_choose_goal:
       # If there is goal noise, sometimes randomly place the goal
+      
       if random.random() < self.goal_noise:
         self.goal_pos = self.place_obj("G", max_tries=100) 
       else:
-        #self.remove_wall(x, y)  # Remove any walls that might be in this loc
-        #self.put_obj("G", x, y)
-        self.map[x*self.ncol+y] = "G"
-        self.goal_pos = (x, y)
-
+        self.map[x][y] = "G"
+    
     # Place the agent
     elif should_choose_agent:
-      #self.remove_wall(x, y)  # Remove any walls that might be in this loc
-
+      
       # Goal has already been placed here
-      if self.map[x*self.ncol+y] is not None:
+      if self.map[x][y] is not None:
         # Place agent randomly
-        self.agent_start_pos = self.place_one_agent(0) 
+        self.agent_pos[0] = self.place_one_agent(0) 
         self.deliberate_agent_placement = 0
       else:
-        self.agent_start_pos = np.array([x, y]) # or x * self.ncol +y
-        self.map[self.agent_start_pos[0]][self.agent_start_pos[1]] = str(0)
+        self.agent_pos[0] = np.array([x, y]) # or x * self.ncol +y
+        self.map[self.agent_pos[0][0]][self.agent_pos[0][1]] = str(0)
         self.deliberate_agent_placement = 1
 
     # Place hole
@@ -304,19 +307,26 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
         self.hole_locs.append((x-1, y-1))
 
     self.adversary_step_count += 1
-
+   
     # End of episode
     if self.adversary_step_count >= self.adversary_max_steps:
       done = True
+      for i in range(self.ncol):
+        for j in range(self.nrow):
+          if self.map[i][j] is None:
+            self.map[i][j] = "F"
+      self.generate_P(self.nrow,self.ncol, self.map, False)
+      if self.render_mode == "human":
+            self.render()
       # Build graph after we are certain agent and goal are placed
       #for w in self.wall_locs:
        # self.graph.remove_node(w)
-      self.compute_shortest_path()
+      #self.compute_shortest_path()
 
     #image = self.map.encode()
     obs = {
         #'image': image,
-        'map' : map,
+        'map' : self.map,
         'time_step': [self.adversary_step_count],
         'random_z': self.generate_random_z()
     }
@@ -325,7 +335,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
 
   def reset_random(self):
     """Use domain randomization to create the environment."""
-    #self.graph = map_graph(dim=[self.width-2, self.height-2])
+    #self.graph = map_graph(dim=[self.ncol-2, self.nrow-2])
 
     self.step_count = 0
     self.adversary_step_count = 0
@@ -333,21 +343,21 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     # Current position and direction of the agent
     self.reset_agent_status()
 
-    self.agent_start_pos = None
+    #self.agent_start_pos = None
     self.goal_pos = None
 
     # Extra metrics
     self.reset_metrics()
 
     # Create empty map
-    self._gen_map(self.width, self.height)
+    self._gen_map(self.ncol, self.nrow)
 
     # Randomly place goal
     self.goal_pos = self.place_obj("G", max_tries=100)
 
     # Randomly place agent
     self.agent_start_dir = self._rand_int(0, 4)
-    self.agent_start_pos = self.place_one_agent(0, rand_dir=False)
+    self.agent_pos[0] = self.place_one_agent(0, rand_dir=False)
 
     # Randomly place walls
     for _ in range(int(self.n_holes / 2)):
@@ -359,5 +369,20 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     return self.reset_agent()
 
 if __name__=="__main__":
-  map = AdversarialEnv()
-  print(map)
+  env = AdversarialEnv(n_holes = 3,size = 5, render_mode = "human")
+  
+  print("Map")
+  print(env.reset())
+  map, time,done, inf = env.step_adversary(loc = 0)
+  #env.step_adversary(loc = 2)
+  i = 1
+  while not done:
+    map, time,done, inf = env.step_adversary(loc = i)
+    i +=1
+
+    print(map)
+  env.step([multifrozenlake.DOWN])
+  env.step([multifrozenlake.DOWN])
+  env.step([multifrozenlake.LEFT])
+
+

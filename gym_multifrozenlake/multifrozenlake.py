@@ -1,6 +1,7 @@
 import gym
 import math
 from gym.envs.toy_text.utils import categorical_sample
+from abc import abstractmethod
 
 from contextlib import closing
 from io import StringIO
@@ -55,6 +56,7 @@ def is_valid(board: List[List[str]], max_nrow: int, max_ncol: int) -> bool:
     return False
 
 ##COPIED FROM FROZENLAKE ENV WITH REPLACING SIZE BY NROW AND NCOL FOR FINER CONTROL
+'''
 def generate_random_map(nrow: int = 8, ncol: int = 8, p: float = 0.8) -> List[str]:
     """Generates a random valid map (one that has a path from start to goal)
     Args:
@@ -75,15 +77,12 @@ def generate_random_map(nrow: int = 8, ncol: int = 8, p: float = 0.8) -> List[st
     print(board)
     print("valid")
     return ["".join(x) for x in board]
-
+'''
 def generate_empty_map(nrow: int = 8, ncol: int = 8):
     assert ncol >= 3
     assert nrow >= 3
 
-    #self.nrow = nrow
-    #self.ncol = ncol
-
-    return [None] * nrow * ncol
+    return [[None for i in range(ncol)] for j in range(nrow)]
 
 class Agent():
   def __init__(self, agent_id, state):
@@ -114,7 +113,7 @@ class MultiFrozenLakeEnv(Env):
     def __init__(
         self,
         render_mode: Optional[str] = None,
-        desc=None,
+        map=None,
         map_size=8,
         nrow=None,
         ncol=None,
@@ -136,10 +135,9 @@ class MultiFrozenLakeEnv(Env):
             assert nrow is None and ncol is None
             nrow = map_size
             ncol = map_size
-        if desc is None: 
-              desc = generate_random_map(nrow, ncol)
-        self.desc = desc = np.asarray(desc, dtype = "c")
-        self.nrow, self.ncol = nrow, ncol = desc.shape
+        
+        #self._gen_grid(map, nrow, ncol)
+        self.map = map
 
         self.n_agents = n_agents
         self.competitive = competitive
@@ -157,52 +155,9 @@ class MultiFrozenLakeEnv(Env):
         # Range of possible rewards
         self.reward_range = (0, 1)
 
-        nA = 4
-        nS = nrow * ncol
+        #self.generate_P(nrow, ncol, self.map, is_slippery)
 
-        self.initial_state_distrib = np.array(desc == b"S").astype("float64").ravel()
-        self.initial_state_distrib /= self.initial_state_distrib.sum()
-
-        self.P = {s: {a: [] for a in range(nA)} for s in range(nS)}
-       
-        def to_s(row, col):
-            return row * ncol + col
-
-        def inc(row, col, a):
-            if a == LEFT:
-                col = max(col - 1, 0)
-            elif a == DOWN:
-                row = min(row + 1, nrow - 1)
-            elif a == RIGHT:
-                col = min(col + 1, ncol - 1)
-            elif a == UP:
-                row = max(row - 1, 0)
-            return (row, col)
-
-        def update_probability_matrix(row, col, action):
-            newrow, newcol = inc(row, col, action)
-            newstate = to_s(newrow, newcol)
-            newletter = desc[newrow, newcol]
-            terminated = bytes(newletter) in b"GH"
-            reward = float(newletter == b"G")
-            return newstate, reward, terminated
-
-        for row in range(nrow):
-            for col in range(ncol):
-                s = to_s(row, col)
-                for a in range(4):
-                    li = self.P[s][a]
-                    letter = desc[row, col]
-                    if letter in b"GH":
-                        li.append((1.0, s, 0, True))
-                    else:
-                        if is_slippery:
-                            for b in [(a - 1) % 4, a, (a + 1) % 4]:
-                                li.append(
-                                    (1.0 / 3.0, *update_probability_matrix(row, col, b))
-                                )
-                        else:
-                            li.append((1.0, *update_probability_matrix(row, col, a)))
+        
 
         # Compute observation and action spaces
         # Direction always has an extra dimension for tf-agents compatibility
@@ -233,7 +188,7 @@ class MultiFrozenLakeEnv(Env):
                
         else:
           '''
-        self.action_space = gym.spaces.Box(low=0, high=nA-1,
+        self.action_space = gym.spaces.Box(low=0, high=3,
                                         shape=(self.n_agents,), dtype='int64')
 
         self.image_obs_space = gym.spaces.Box(
@@ -258,14 +213,13 @@ class MultiFrozenLakeEnv(Env):
         self.nrow = nrow
         self.ncol = ncol
         self.render_mode = render_mode
+        self.is_slippery = is_slippery
 
         #current position and direction of agents
         self.agent_pos = [[None, None]] * self.n_agents
-        print(self.agent_pos)
         for a in range(self.n_agents):
             self.agent_pos[a][0] = 0
             self.agent_pos[a][1] = 0
-        print(self.agent_pos)
         #self.agent_dir = [None] * self.n_agents
 
         # Maintain a done variable for each agent
@@ -291,6 +245,55 @@ class MultiFrozenLakeEnv(Env):
         self.fixed_environment = fixed_environment
         #Initialize the state
         self.reset()
+    def generate_P(self, nrow, ncol, map, is_slippery):
+        nA = 4
+        nS = nrow * ncol
+
+        self.initial_state_distrib = np.array(map == b"S").astype("float64").ravel()
+        self.initial_state_distrib /= self.initial_state_distrib.sum()
+
+        self.P = {s: {a: [] for a in range(nA)} for s in range(nS)}
+       
+        def to_s(row, col):
+            return row * ncol + col
+
+        def inc(row, col, a):
+            if a == LEFT:
+                col = max(col - 1, 0)
+            elif a == DOWN:
+                row = min(row + 1, nrow - 1)
+            elif a == RIGHT:
+                col = min(col + 1, ncol - 1)
+            elif a == UP:
+                row = max(row - 1, 0)
+            return (row, col)
+
+        def update_probability_matrix(row, col, action):
+            newrow, newcol = inc(row, col, action)
+            newstate = to_s(newrow, newcol)
+            newletter = map[newrow][newcol]#map[newrow, newcol]
+            terminated = newletter in "GH" #bytes(newletter) in b"GH"
+            reward = float(newletter == "G")
+            return newstate, reward, terminated
+
+        for row in range(nrow):
+            for col in range(ncol):
+                s = to_s(row, col)
+                for a in range(4):
+                    li = self.P[s][a]
+                    letter = map[row][col]#map[row, col]
+                    if letter in "GH":
+                        li.append((1.0, s, 0, True))
+                    else:
+                        if is_slippery:
+                            for b in [(a - 1) % 4, a, (a + 1) % 4]:
+                                li.append(
+                                    (1.0 / 3.0, *update_probability_matrix(row, col, b))
+                                )
+                        else:
+                            li.append((1.0, *update_probability_matrix(row, col, a)))
+        
+
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         if self.fixed_environment:
@@ -301,16 +304,15 @@ class MultiFrozenLakeEnv(Env):
         #self.agent_dir = [None] * self.n_agents
         self.done = [False] * self.n_agents
 
-        #generate_random_map(self.nrow, self.ncol) # oder _gen_map controlled by adversary
-        #doesnt work because agent pos not setted with map creation, lieber gen map function die place agent aufruft
-        '''
+        self.map = self._gen_map(self.map,self.ncol, self.nrow)
+        self.generate_P(self.nrow, self.ncol, self.map, self.is_slippery)
+
+        
         for a in range(self.n_agents):
           assert self.agent_pos[a] is not None
-          assert self.agent_dir[a] is not None
-        '''
+        
         for a in range(self.n_agents):
             pos = categorical_sample(self.initial_state_distrib, self.np_random)
-            print(self.agent_pos)
             self.agent_pos[a][0] = pos // self.ncol
             self.agent_pos[a][1] = pos % self.ncol
         self.lastaction = [None]*self.n_agents
@@ -320,9 +322,24 @@ class MultiFrozenLakeEnv(Env):
         return self.agent_pos#, {"prob": 1}
         #obse = self.gen_obs()
 
-        #return obs
-    def step_one_agent(self, a, agent_id):
-        transitions = self.P[self.agent_pos[agent_id][0]*self.ncol + self.agent_pos[agent_id][1]][a]
+    '''
+    def _gen_map(self, map, nrow, ncol):
+        if map is None: 
+              map = generate_random_map(nrow, ncol)
+        print("Generated")
+        print(map)
+        self.map = map = np.asarray(map, dtype = "c").decode("UTF-8")
+        print(map)
+        self.nrow, self.ncol = nrow, ncol = map.shape
+        return self.map
+    '''
+    @abstractmethod
+    def _gen_map(self, map, ncol, nrow):
+        pass
+    
+
+    def step_one_agent(self, act, agent_id):
+        transitions = self.P[self.agent_pos[agent_id][0]*self.ncol + self.agent_pos[agent_id][1]][act]
         i = categorical_sample([t[0] for t in transitions], self.np_random)
         p, pos, r, t = transitions[i]
         posit = [None] *2
@@ -334,7 +351,7 @@ class MultiFrozenLakeEnv(Env):
                 r = 0
         if not agent_blocking:
             self.agent_pos[agent_id] = posit
-            self.lastaction[agent_id] = a
+            self.lastaction[agent_id] = act
 
         if self.render_mode == "human":
             self.render()
@@ -362,7 +379,7 @@ class MultiFrozenLakeEnv(Env):
         # Running out of time applies to all agents
         # if self.step_count >= self.max_steps:
         #  collective_done = True
-        print(self.agent_pos)
+        
         return self.agent_pos, rewards, collective_done, {}
     
     
@@ -410,7 +427,7 @@ class MultiFrozenLakeEnv(Env):
                                             min(top[1] + size[1], self.nrow))))
 
             # Don't place the object on top of another object
-            if self.desc[pos[0]][pos[1]] is not None:
+            if self.map[pos[0]][pos[1]] is not None:
                 continue
             # ALREADY CHECKED THROUGH NONE_CHECK
             # Don't place the object where the agent is
@@ -427,7 +444,7 @@ class MultiFrozenLakeEnv(Env):
 
             break
 
-        self.desc[pos[0]][pos[1]] = obj
+        self.map[pos[0]][pos[1]] = obj
 
         #if obj is not None:
         #obj.init_pos = pos
@@ -463,7 +480,6 @@ class MultiFrozenLakeEnv(Env):
 
     def render(self):
         if self.render_mode == "ansi":
-            print("Rendering:")
             return self._render_text()
         else:  # self.render_mode in {"human", "rgb_array"}:
             return self._render_gui(self.render_mode)
@@ -528,20 +544,22 @@ class MultiFrozenLakeEnv(Env):
                 pygame.transform.scale(pygame.image.load(f_name), self.cell_size)
                 for f_name in elfs
             ]
-
-        desc = self.desc.tolist()
-        assert isinstance(desc, list), f"desc should be a list or an array, got {desc}"
+        
+       
+       # print(self.map.tolist())
+        map = self.map
+        assert isinstance(map, list), f"map should be a list or an array, got {map}"
         for y in range(self.nrow):
             for x in range(self.ncol):
                 pos = (x * self.cell_size[0], y * self.cell_size[1])
                 rect = (*pos, *self.cell_size)
 
                 self.window_surface.blit(self.ice_img, pos)
-                if desc[y][x] == b"H":
+                if map[y][x] == "H":
                     self.window_surface.blit(self.hole_img, pos)
-                elif desc[y][x] == b"G":
+                elif map[y][x] == "G":
                     self.window_surface.blit(self.goal_img, pos)
-                elif desc[y][x] == b"S":
+                elif map[y][x] == "S":
                     self.window_surface.blit(self.start_img, pos)
 
                 pygame.draw.rect(self.window_surface, (180, 200, 230), rect, 1)
@@ -550,11 +568,13 @@ class MultiFrozenLakeEnv(Env):
         
         for a in range(self.n_agents):
             bot_row, bot_col = self.agent_pos[a][0], self.agent_pos[a][1]
+            
             cell_rect = (bot_col * self.cell_size[0], bot_row * self.cell_size[1])
+            
             last_action = self.lastaction[a] if self.lastaction[a] is not None else 1
             elf_img = self.elf_images[last_action]
 
-            if desc[bot_row][bot_col] == b"H":
+            if map[bot_row][bot_col] == "H":
                 self.window_surface.blit(self.cracked_hole_img, cell_rect)
             else:
                 self.window_surface.blit(elf_img, cell_rect)
@@ -578,36 +598,38 @@ class MultiFrozenLakeEnv(Env):
         )
 
     def _render_text(self):
-        desc = self.desc.tolist()
+        map = self.map.tolist()
         outfile = StringIO()
         row = [None] * self.n_agents
         col = [None] * self.n_agents
         for a in range(self.n_agents):
           row[a], col[a] = self.agent_pos[a][0], self.agent_pos[a][1]
-        desc = [[c.decode("utf-8") for c in line] for line in desc]
-        print("desc2")
-        print(desc)
+        map = [[c.decode("utf-8") for c in line] for line in map]
+        
         for a in range(self.n_agents):
-          print(COLOURS[a])
-          desc[row[a]][col[a]] = utils.colorize(desc[row[a]][col[a]], COLOURS[a], highlight=True)
+          map[row[a]][col[a]] = utils.colorize(map[row[a]][col[a]], COLOURS[a], highlight=True)
           
           if self.lastaction[a] is not None:
               outfile.write(f"Agent {a}: ({['Left', 'Down', 'Right', 'Up'][self.lastaction[a]]})\n")
           else:
               outfile.write("\n")
-        outfile.write("\n".join("".join(line) for line in desc) + "\n")
+        outfile.write("\n".join("".join(line) for line in map) + "\n")
 
         with closing(outfile):
             return outfile.getvalue()
 
 if __name__=="__main__":
     fl = MultiFrozenLakeEnv(render_mode='human', is_slippery = False)
-    #print(fl.desc)
+    #print(fl.map)
+    
+    #print("map")
+    #map[0][0] = "h"
+    #print(map)
     fl.reset()
-    fl.step([LEFT, DOWN, LEFT])
-    fl.step([RIGHT, DOWN, LEFT])
-    fl.step([RIGHT, DOWN, LEFT])
-    fl.step([RIGHT, DOWN, LEFT])
+    #fl.step([LEFT, DOWN, LEFT])
+    #fl.step([RIGHT, DOWN, LEFT])
+    #fl.step([RIGHT, DOWN, LEFT])
+    #fl.step([RIGHT, DOWN, LEFT])
     #print(fl.action_space)
-    #print(fl.desc)
+    #print(fl.map)
     #fl.render()
