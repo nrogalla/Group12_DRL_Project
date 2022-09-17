@@ -10,7 +10,7 @@ from typing import List, Optional
 
 import numpy as np
 
-from gym import Env, spaces, utils
+from gym import Env, utils
 
 from gym.error import DependencyNotInstalled
 
@@ -19,18 +19,13 @@ DOWN = 1
 RIGHT = 2
 UP = 3
 
-AGENT_COLOURS = [
-    np.array([60, 182, 234]),  # Blue
-    np.array([229, 52, 52]),  # Red
-    np.array([144, 32, 249]),  # Purple
-    np.array([69, 196, 60]),  # Green
-    np.array([252, 227, 35]),  # Yellow
-] 
 
-COLOURS = [
+AGENT_COLOURS = [
     "red",
     "blue",
-    "green"
+    "green",
+    "yellow",
+    "purple"
 ]
 
 ##COPIED FROM FROZENLAKE ENV  WITH REPLACING SIZE BY NROW AND NCOL FOR FINER CONTROL
@@ -55,60 +50,42 @@ def is_valid(board: List[List[str]], max_nrow: int, max_ncol: int) -> bool:
                     frontier.append((r_new, c_new))
     return False
 
-##COPIED FROM FROZENLAKE ENV WITH REPLACING SIZE BY NROW AND NCOL FOR FINER CONTROL
-'''
-def generate_random_map(nrow: int = 8, ncol: int = 8, p: float = 0.8) -> List[str]:
-    """Generates a random valid map (one that has a path from start to goal)
-    Args:
-        size: size of each side of the grid
-        p: probability that a tile is frozen
-    Returns:
-        A random valid map
-    """
-    valid = False
-    board = []  # initialize to make pyright happy
-
-    while not valid:
-        p = min(1, p)
-        board = np.random.choice(["F", "H"], (nrow, ncol), p=[p, 1 - p])
-        board[0][0] = "S"
-        board[-1][-1] = "G"
-        valid = is_valid(board, nrow, ncol)
-    print(board)
-    print("valid")
-    return ["".join(x) for x in board]
-'''
 def generate_empty_map(nrow: int = 8, ncol: int = 8):
+    """Generates an empty map
+    Args:
+        nrow: number of rows in the map
+        ncol: number of columns in the map
+    Returns:
+        An empty map
+    """
     assert ncol >= 3
     assert nrow >= 3
 
-    return [[None for i in range(ncol)] for j in range(nrow)]
-
-class Agent():
-  def __init__(self, agent_id, state):
-    super(Agent,self).__init__('agent')
-    self.agent_id = agent_id
-    self.dir = state
-  
-  #adapt rendering
-  '''
-  def render(self, img):
-    tri_fn = rendering.point_in_triangle(
-        (0.12, 0.19),
-        (0.87, 0.50),
-        (0.12, 0.81),
-    )
-
-    # Rotate the agent based on its direction
-    tri_fn = rendering.rotate_fn(
-        tri_fn, cx=0.5, cy=0.5, theta=0.5 * math.pi * self.dir)
-    color = AGENT_COLOURS[self.agent_id]
-    rendering.fill_coords(img, tri_fn, color)
-  '''
+    return [[None for _ in range(ncol)] for _ in range(nrow)]
 
 
 class MultiFrozenLakeEnv(Env):
-    """Frozen lake environment with multi-agent support."""
+    """
+    Frozen lake environment with multi-agent support.
+
+    ### Action Space
+    The agent takes a n_agent-element vector for actions, specifying the action to be taken for each of the agents.
+    The action space is `(dir)`, where `dir` decides direction to move in which can be:
+    - 0: LEFT
+    - 1: DOWN
+    - 2: RIGHT
+    - 3: UP
+
+    ### Observation Space
+    The observation is a n_agents-element vector containing 2-element vectors with both 
+    row and column coordinate of the agents positions on the map. 
+    
+    ### Rewards
+    Reward schedule:
+    - Reach goal(G): +1
+    - Reach hole(H): 0
+    - Reach frozen(F): 0
+    """
 
     def __init__(
         self,
@@ -123,11 +100,38 @@ class MultiFrozenLakeEnv(Env):
         fixed_environment=False,
         fully_observed=False,
         agent_view_size=2,
-        #frozenlake_mode=False,
         max_steps=200,
         seed=52
 
     ):
+        """Constructor for multi-agent frozenlake environment generator.
+        Args:
+        map: Used to specify custom map for frozen lake.
+        map_size: Number of tiles for the width and height of the square map.
+        ncol: Number of tiles across map width.
+        nrow: Number of tiles in map of grid.
+        is_slippery: True/False. If True will move in intended direction with
+            probability of 1/3 else will move in either perpendicular direction with
+            equal probability of 1/3 in both directions.
+        n_agents: The number of agents playing in the world.
+        competitive: If True, as soon as one agent locates the goal, the episode
+            ends for all agents. If False, if one agent locates the goal it is
+            respawned somewhere else in the grid, and the episode continues until
+            max_steps is reached.
+        fixed_environment: If True, will use the same random seed each time the
+            environment is generated, so it will remain constant / be the same
+            environment each time.
+        fully_observed: If True, each agent will receive an observation of the
+            full environment state, rather than a partially observed, ego-centric
+            observation.
+        agent_view_size: Number of tiles in the agent's square, partially
+            observed view of the world.
+        max_steps: Number of environment steps before the episode end (max
+            episode length).
+        seed: Random seed used in generating environments.
+        
+        
+        """
         self.fully_observed = fully_observed
 
         # Can't set both map_size and nrow/ncol
@@ -136,7 +140,6 @@ class MultiFrozenLakeEnv(Env):
             nrow = map_size
             ncol = map_size
         
-        #self._gen_grid(map, nrow, ncol)
         self.map = map
 
         self.n_agents = n_agents
@@ -146,8 +149,6 @@ class MultiFrozenLakeEnv(Env):
         if self.n_agents == 1:
             self.competitive = True
         
-        #self.actions = 
-
         self.agent_view_size = agent_view_size
         if self.fully_observed:
             self.agent_view_size = max(nrow, ncol)
@@ -155,52 +156,24 @@ class MultiFrozenLakeEnv(Env):
         # Range of possible rewards
         self.reward_range = (0, 1)
 
-        #self.generate_P(nrow, ncol, self.map, is_slippery)
-
-        
-
         # Compute observation and action spaces
-        # Direction always has an extra dimension for tf-agents compatibility
-        self.direction_obs_space = gym.spaces.Box(
-            low=0, high=3, shape=(self.n_agents,), dtype='uint8')
-
-        #self.frozenlake_mode = frozenlake_mode
-        
         if self.fully_observed:
-            obs_image_shape = (ncol,nrow, 3)
+            obs_map_shape = (ncol,nrow, 3)
         else:
-            obs_image_shape = (self.agent_view_size, self.agent_view_size, 3)
-        '''
-        if self.frozenlake_mode: 
-            msg = 'Backwards compatibility with minigrid only possible with 1 agent'
-            assert self.n_agents == 1, msg
-
-            # Single agent case
-            self.action_space = gym.spaces.Discrete(len(self.actions))
-            #self.observation_space = gym.spaces.Discrete(nrow * ncol)
-
-            # Images have three dimensions
-            self.image_obs_space = gym.spaces.Box(
-                low=0,
-                high=255,
-                shape=obs_image_shape,
-                dtype='uint8')
-               
-        else:
-          '''
+            obs_map_shape = (self.agent_view_size, self.agent_view_size, 3)
+        
         self.action_space = gym.spaces.Box(low=0, high=3,
                                         shape=(self.n_agents,), dtype='int64')
 
-        self.image_obs_space = gym.spaces.Box(
-          low=0,
-          high=255,
-          shape=(self.n_agents,) + obs_image_shape,
+        map_space = gym.spaces.Box(
+          low= 0,
+          high= 2,
+          shape=(self.n_agents,) + obs_map_shape,
           dtype='uint8')
 
         # Observations are dictionaries containing an encoding of the grid and the
         # agent's direction
-        observation_space = {'image': self.image_obs_space,
-                            'direction': self.direction_obs_space}
+        observation_space = {'map': map_space}
         if self.fully_observed:
             self.position_obs_space = gym.spaces.Box(low=0,
                                                 high=max(nrow, ncol),
@@ -215,12 +188,11 @@ class MultiFrozenLakeEnv(Env):
         self.render_mode = render_mode
         self.is_slippery = is_slippery
 
-        #current position and direction of agents
+        #current position of agents
         self.agent_pos = [[None, None]] * self.n_agents
         for a in range(self.n_agents):
             self.agent_pos[a][0] = 0
             self.agent_pos[a][1] = 0
-        #self.agent_dir = [None] * self.n_agents
 
         # Maintain a done variable for each agent
         self.done = [False] * self.n_agents
@@ -245,6 +217,9 @@ class MultiFrozenLakeEnv(Env):
         self.fixed_environment = fixed_environment
         #Initialize the state
         self.reset()
+
+    # initializes probability table for map with probability of transitioning to the next tile 
+    # in the intended direction based on the slippery nature of the map
     def generate_P(self, nrow, ncol, map, is_slippery):
         nA = 4
         nS = nrow * ncol
@@ -271,8 +246,8 @@ class MultiFrozenLakeEnv(Env):
         def update_probability_matrix(row, col, action):
             newrow, newcol = inc(row, col, action)
             newstate = to_s(newrow, newcol)
-            newletter = map[newrow][newcol]#map[newrow, newcol]
-            terminated = newletter in "GH" #bytes(newletter) in b"GH"
+            newletter = map[newrow][newcol]
+            terminated = newletter in "GH" 
             reward = float(newletter == "G")
             return newstate, reward, terminated
 
@@ -281,7 +256,7 @@ class MultiFrozenLakeEnv(Env):
                 s = to_s(row, col)
                 for a in range(4):
                     li = self.P[s][a]
-                    letter = map[row][col]#map[row, col]
+                    letter = map[row][col]
                     if letter in "GH":
                         li.append((1.0, s, 0, True))
                     else:
@@ -295,19 +270,20 @@ class MultiFrozenLakeEnv(Env):
         
 
 
-    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
+    def reset(self, options: Optional[dict] = None):
         if self.fixed_environment:
             self.seed(self.seed_value)
 
-        # Current position and direction of the agent
+        # Current position of the agent
         self.agent_pos = [[None, None]] * self.n_agents
-        #self.agent_dir = [None] * self.n_agents
-        self.done = [False] * self.n_agents
 
+        self.done = [False] * self.n_agents
+        # Generate the grid. Will be random by default, or same environment if
+        # 'fixed_environment' is True.
         self.map = self._gen_map(self.map,self.ncol, self.nrow)
         self.generate_P(self.nrow, self.ncol, self.map, self.is_slippery)
 
-        
+        # should be defined by _gen_map
         for a in range(self.n_agents):
           assert self.agent_pos[a] is not None
         
@@ -319,20 +295,90 @@ class MultiFrozenLakeEnv(Env):
 
         if self.render_mode == "human":
             self.render()
-        return self.agent_pos#, {"prob": 1}
-        #obse = self.gen_obs()
+        
+        obs = self.gen_obs()
 
-    '''
-    def _gen_map(self, map, nrow, ncol):
-        if map is None: 
-              map = generate_random_map(nrow, ncol)
-        print("Generated")
-        print(map)
-        self.map = map = np.asarray(map, dtype = "c").decode("UTF-8")
-        print(map)
-        self.nrow, self.ncol = nrow, ncol = map.shape
-        return self.map
-    '''
+        return obs
+        
+        #return self.agent_pos
+
+    def gen_obs(self):
+        """Generate the stacked observation for all agents."""
+        maps = []
+        positions = []
+        for a in range(self.n_agents):
+            
+            if self.fully_observed:
+                map = self.map
+                
+            else:
+                map = self.gen_obs_map(a)
+            maps.append(map)
+            
+            positions.append(self.agent_pos[a])
+
+        obs = {
+            'map': maps,
+        }
+        if self.fully_observed:
+            obs['position'] = positions
+
+        return obs
+
+    
+    def get_view_exts(self, agent_id):
+        """Get the extents of the square set of tiles visible to the agent.
+        
+        Args:
+        agent_id: Integer ID of the agent.
+        Returns:
+        Top left and bottom right (x,y) coordinates of set of visible tiles.
+        """
+        # Facing left
+        if self.lastaction[agent_id] == 0:
+            top_x = self.agent_pos[agent_id][0] - self.agent_view_size + 1
+            top_y = self.agent_pos[agent_id][1] +1 - self.agent_view_size // 2
+        # Facing down
+        elif self.lastaction[agent_id] == 1 or self.lastaction[agent_id] is None:
+            top_x = self.agent_pos[agent_id][0]+1 - self.agent_view_size // 2
+            top_y = self.agent_pos[agent_id][1]
+        # Facing right
+        elif self.lastaction[agent_id] == 2:
+            top_x = self.agent_pos[agent_id][0]
+            top_y = self.agent_pos[agent_id][1] +1 - self.agent_view_size // 2
+        # Facing up
+        elif self.lastaction[agent_id] == 3:
+            top_x = self.agent_pos[agent_id][0] +1 - self.agent_view_size // 2
+            top_y = self.agent_pos[agent_id][1] +1 - self.agent_view_size + 1
+        else:
+            assert False, 'invalid agent direction'
+        if top_x < 0: 
+            top_x = 0
+        if top_y < 0:
+            top_y = 0
+        bot_x = top_x + self.agent_view_size
+        bot_y = top_y + self.agent_view_size
+        if bot_x > self.nrow:
+            bot_x = self.nrow -1
+        if bot_y > self.ncol:
+            bot_y = self.ncol -1
+
+        return (top_x, top_y, bot_x, bot_y)
+
+    def gen_obs_map(self, agent_id):
+        """Generate the sub-map observed by the agent.
+        Args:
+        agent_id: Integer ID of the agent for which to generate the grid.
+        Returns:
+        Sub-map
+        """
+        top_x, top_y, bot_x, bot_y = self.get_view_exts(agent_id)
+    
+        obs_map = [sub[top_x:bot_x] for sub in self.map[top_y:bot_y]]
+
+        return obs_map
+
+    
     @abstractmethod
     def _gen_map(self, map, ncol, nrow):
         pass
@@ -349,13 +395,18 @@ class MultiFrozenLakeEnv(Env):
             if a != agent_id and np.array_equal(self.agent_pos[a], posit):
                 agent_blocking = True
                 r = 0
-        if not agent_blocking:
+        if not agent_blocking and not self.done[agent_id]:
             self.agent_pos[agent_id] = posit
             self.lastaction[agent_id] = act
+            if self.map[posit[0]][posit[1]] == 'G':
+                self.agent_is_done(agent_id)
+            
+                
+            
 
         if self.render_mode == "human":
             self.render()
-        return r #(int(s), r, t, False, {"prob": p})
+        return r 
 
     def step(self, actions):
 
@@ -369,8 +420,6 @@ class MultiFrozenLakeEnv(Env):
         for a in agent_ordering:
             rewards[a] = self.step_one_agent(actions[a], a)
 
-        #obs = self.gen_obs()
-
         collective_done = False
         # In competitive version, if one agent finishes the episode is over.
         if self.competitive:
@@ -383,11 +432,6 @@ class MultiFrozenLakeEnv(Env):
         return self.agent_pos, rewards, collective_done, {}
     
     
-    """
-    @abstractmethod
-    def _gen_map(self, nrow, ncol): # needs to be implemented in adversary
-        pass
-    """
     def place_obj(self,
                     obj,
                     top=None,
@@ -421,34 +465,17 @@ class MultiFrozenLakeEnv(Env):
 
             num_tries += 1
 
-            pos = np.array((self._rand_int(top[0],
+            pos = np.array((np.random.randint(top[0],
                                             min(top[0] + size[0], self.ncol)),
-                            self._rand_int(top[1],
+                            np.random.randint(top[1],
                                             min(top[1] + size[1], self.nrow))))
-
-            # Don't place the object on top of another object
-            if self.map[pos[0]][pos[1]] is not None:
-                continue
-            # ALREADY CHECKED THROUGH NONE_CHECK
-            # Don't place the object where the agent is
-            #pos_no_good = False
-            #for a in range(self.n_agents):
-            #    if np.array_equal(pos, self.agent_pos[a]):
-            #    pos_no_good = True
-            #if pos_no_good:
-            #    continue
-
-            # Check if there is a filtering criterion
-            #if reject_fn and reject_fn(self, pos):
-             #   continue
-
+            
             break
-
-        self.map[pos[0]][pos[1]] = obj
-
-        #if obj is not None:
-        #obj.init_pos = pos
-        #obj.cur_pos = pos
+        if obj == "H" or obj == "F": 
+            self.map[pos[0]][pos[1]] = obj
+        else:
+            self.map[pos[0]][pos[1]] = 'F'
+            
 
         return pos
 
@@ -475,7 +502,8 @@ class MultiFrozenLakeEnv(Env):
 
         self.agent_pos[agent_id] = None
         pos = self.place_obj(str(agent_id), top, size, max_tries=max_tries)
-
+        self.agent_pos[agent_id] = pos
+        self.lastaction[agent_id] = None
         return pos
 
     def render(self):
@@ -545,8 +573,6 @@ class MultiFrozenLakeEnv(Env):
                 for f_name in elfs
             ]
         
-       
-       # print(self.map.tolist())
         map = self.map
         assert isinstance(map, list), f"map should be a list or an array, got {map}"
         for y in range(self.nrow):
@@ -607,7 +633,7 @@ class MultiFrozenLakeEnv(Env):
         map = [[c.decode("utf-8") for c in line] for line in map]
         
         for a in range(self.n_agents):
-          map[row[a]][col[a]] = utils.colorize(map[row[a]][col[a]], COLOURS[a], highlight=True)
+          map[row[a]][col[a]] = utils.colorize(map[row[a]][col[a]], AGENT_COLOURS[a], highlight=True)
           
           if self.lastaction[a] is not None:
               outfile.write(f"Agent {a}: ({['Left', 'Down', 'Right', 'Up'][self.lastaction[a]]})\n")
@@ -617,19 +643,16 @@ class MultiFrozenLakeEnv(Env):
 
         with closing(outfile):
             return outfile.getvalue()
+            
+    def agent_is_done(self, agent_id):
+
+        self.done[agent_id] = True
+
+        # Respawn agent in new location
+        self.place_one_agent(agent_id)
 
 if __name__=="__main__":
     fl = MultiFrozenLakeEnv(render_mode='human', is_slippery = False)
-    #print(fl.map)
-    
-    #print("map")
-    #map[0][0] = "h"
-    #print(map)
     fl.reset()
-    #fl.step([LEFT, DOWN, LEFT])
-    #fl.step([RIGHT, DOWN, LEFT])
-    #fl.step([RIGHT, DOWN, LEFT])
-    #fl.step([RIGHT, DOWN, LEFT])
-    #print(fl.action_space)
-    #print(fl.map)
-    #fl.render()
+
+ 
