@@ -1,4 +1,5 @@
 import PPO_Agent
+import Buffer
 import numpy as np
 
 class PPO(object):
@@ -12,6 +13,7 @@ class PPO(object):
         self.best_reward = 0
         self.avg_rewards_list = []
 
+    # only copied
     def process_buffer(states, actions, rewards, dones, values, gamma):
         g = 0
         lambda_value = 0.95
@@ -39,9 +41,9 @@ class PPO(object):
 
             for e in episode_length:
                 action, probs = self.agent.get_action(state)
-                value = agent.critic(np.array([state])).numpy()
+                value = self.agent.critic(np.array([state])).numpy()
                 next_state, reward, done, _ = env.step(action)
-                buffer.storeTransition(state, action, reward, value, probs, done)
+                self.buffer.storeTransition(state, action, reward, value, probs, done)
                 state = next_state
 
                 if done == 1:
@@ -52,10 +54,10 @@ class PPO(object):
             np.reshape(probs, (len(probs),2))
             probs = np.stack(probs, axis=0)
 
-            states, actions, returns, advantages = process_buffer(states, actions, rewards, done, values) 
+            states, actions, returns, advantages = self.buffer.process_buffer(states, actions, rewards, done, values) 
 
             for epochs in range(10):
-                al,cl = agent.learn(states, actions, adv, probs, returns)
+                al,cl = self.agent.learn(states, actions, advantages, probs, returns)
 
 
 
