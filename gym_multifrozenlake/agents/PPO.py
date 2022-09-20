@@ -32,6 +32,7 @@ class PPO(object):
             
             done = False
             state = env.reset()
+            self.buffer.clear()
 
             for e in steps:
                 action, probs = self.agent.get_action(state)
