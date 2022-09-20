@@ -6,10 +6,11 @@ import Critic
 
 class PPO_Agent(object):
 
-    def __init__(number_actions: int, number_observations: int, alpha: float = 0.001, gamma: float = 0.7, epsilon: float = 0.25):
+    def __init__(self, number_actions: int, number_observations: int, alpha: float = 0.001, gamma: float = 0.7, epsilon: float = 0.25):
         self.n_actions = number_actions
         self.n_observations = number_observations
-        self.learning_rate = alpha
+        self.optimizer_actor = tf.keras.optimizer.Adam(learning_rate=alpha)
+        self.optimizer_critic = tf.keras.optimizer.Adam(learning_rate=alpha)
         self.gamma = gamma
         self.epsilon = epsilon
         self.actor = Actor(number_actions, number_observations, 256, 128, 64)
@@ -19,19 +20,19 @@ class PPO_Agent(object):
         
         observation = np.array([observation])
         action_probs = self.actor(observation)
-        action_probs = action_props.numpy()
-        probs = tf.tfp.distributions.Categorical(probs=actions_probs, dtype=tf.float32)
+        action_probs = action_probs.numpy()
+        probs = tf.tfp.distributions.Categorical(probs=action_probs, dtype=tf.float32)
         action = probs.sample()
         
         return int(action.numpy()[0]), probs
 
-    def process_buffer(states, actions, rewards, values, dones):
+    def process_buffer(self, states, actions, rewards, values, dones):
         g = 0
         returns = []
 
         for i in range(1, len(rewards) + 1):
-            delta = rewards[-i] + gamma * values[-i + 1] *dones[-i] - values[i]
-            g = delta + gamma * dones[-i] * g
+            delta = rewards[-i] + self.gamma * values[-i + 1] *dones[-i] - values[i]
+            g = delta + self.gamma * dones[-i] * g
             returns.append(g + values[-i])
             returns.insert(0, g + values[-i])
 
@@ -44,9 +45,9 @@ class PPO_Agent(object):
 
 
 
-    def calculate_loss(self, probs, actions, advantage, old_probs, critic_loss):
+    def calculate_loss(self, probs, actions, adv, old_probs, critic_loss):
         
-        probability = probs      
+        probability = old_probs      
         entropy = tf.reduce_mean(tf.math.negative(tf.math.multiply(probability,tf.math.log(probability))))
         sur1 = []
         sur2 = []
@@ -62,15 +63,15 @@ class PPO_Agent(object):
         sr1 = tf.stack(sur1)
         sr2 = tf.stack(sur2)
         
-        loss = tf.math.negative(tf.reduce_mean(tf.math.minimum(sr1, sr2)) - closs + 0.001 * entropy)
+        loss = tf.math.negative(tf.reduce_mean(tf.math.minimum(sr1, sr2)) - critic_loss + 0.001 * entropy)
         return loss
 
     def learn(self, states, actions, rewards, values, dones, probs):
-        states, actions, returns, advantages = process_buffer(states, actions, rewards, values, dones)
+        states, actions, returns, advantages = self.process_buffer(states, actions, rewards, values, dones)
         discnt_rewards = tf.reshape(discnt_rewards, (len(discnt_rewards),))
         adv = tf.reshape(adv, (len(adv),))
 
-        old_p = old_probs
+        old_p = probs
 
         old_p = tf.reshape(old_p, (len(old_p),2))
         with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
@@ -79,11 +80,11 @@ class PPO_Agent(object):
             v = tf.reshape(v, (len(v),))
             td = tf.math.subtract(discnt_rewards, v)
             c_loss = 0.5 * kls.mean_squared_error(discnt_rewards, v)
-            a_loss = self.actor_loss(p, actions, adv, old_probs, c_loss)
+            a_loss = self.actor_loss(p, actions, adv, probs, c_loss)
             
         grads1 = tape1.gradient(a_loss, self.actor.trainable_variables)
         grads2 = tape2.gradient(c_loss, self.critic.trainable_variables)
-        self.a_opt.apply_gradients(zip(grads1, self.actor.trainable_variables))
-        self.c_opt.apply_gradients(zip(grads2, self.critic.trainable_variables))
+        self.optimizer_actor.apply_gradients(zip(grads1, self.actor.trainable_variables))
+        self.optimizer_critic.apply_gradients(zip(grads2, self.critic.trainable_variables))
         return a_loss, c_loss
         

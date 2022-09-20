@@ -14,12 +14,12 @@ class PPO(object):
         self.best_reward = 0
         self.avg_rewards_list = []
 
-    def test_reward(env):
+    def test_reward(self, env):
         total_reward = 0
         state = env.reset()
         done = False
         while not done:
-            action = np.argmax(agentoo7.actor(np.array([state])).numpy())
+            action = np.argmax(self.agent.actor(np.array([state])).numpy())
             next_state, reward, done, _ = env.step(action)
             state = next_state
             total_reward += reward
@@ -28,13 +28,13 @@ class PPO(object):
 
     def run(self, env, episode_length: int, steps: int):
 
-        for s in range(epsiode_length):
+        for s in range(episode_length):
             
             done = False
             state = env.reset()
             self.buffer.clear()
 
-            for e in steps:
+            for e in range(steps):
                 action, probs = self.agent.get_action(state)
                 value = self.agent.critic(np.array([state])).numpy()
                 next_state, reward, done, _ = env.step(action)
