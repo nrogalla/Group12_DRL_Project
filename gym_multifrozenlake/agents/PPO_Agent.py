@@ -1,5 +1,8 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow_probabilty as tfp
+import Actor
+import Critic
 
 class PPO_Agent(object):
 
@@ -16,7 +19,7 @@ class PPO_Agent(object):
         observation = np.array([observation])
         action_probs = self.actor(observation)
         action_probs = action_props.numpy()
-        probs = tfp.distributions.Categorical(probs=actions_probs, dtype=tf.float32)
+        probs = tf.tfp.distributions.Categorical(probs=actions_probs, dtype=tf.float32)
         action = probs.sample()
         
         return int(action.numpy()[0]), probs
