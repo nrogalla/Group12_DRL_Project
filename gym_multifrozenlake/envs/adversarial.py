@@ -79,9 +79,9 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
         low=0, high=self.adversary_max_steps, shape=(1,), dtype='uint8')
     self.adversary_randomz_obs_space = gym.spaces.Box(
         low=0, high=1.0, shape=(random_z_dim,), dtype=np.float32)
-    self.adversary_image_obs_space = gym.spaces.Box(
+    self.adversary_map_obs_space = gym.spaces.Box(
         low=0,
-        high=255,
+        high=4,
         shape=(self.ncol, self.nrow, 3),
         dtype='uint8')
 
@@ -89,7 +89,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     # map, the current time step, and a randomly generated vector used to
     # condition generation (as in a GAN).
     self.adversary_observation_space = gym.spaces.Dict(
-        {'image': self.adversary_image_obs_space,
+        {'map': self.adversary_map_obs_space,
          'time_step': self.adversary_ts_obs_space,
          'random_z': self.adversary_randomz_obs_space})
   
@@ -330,7 +330,7 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
     # Observations are dictionaries containing an encoding of the grid and the
     # agent's direction
     self.adversary_observation_space = gym.spaces.Dict(
-        {'image': self.adversary_image_obs_space,
+        {'map': self.adversary_map_obs_space,
          'time_step': self.adversary_ts_obs_space,
          'random_z': self.adversary_randomz_obs_space,
          'x': self.adversary_xy_obs_space,
@@ -444,19 +444,19 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
 
 
 if __name__=="__main__":
-  env = ReparameterizedAdversarialEnv(n_holes = 3,size = 5, render_mode = "human", agent_view_size = 2)
+  env = ReparameterizedAdversarialEnv(n_holes = 3,size = 5, render_mode = "human", agent_view_size = 2, max_steps = 2)
   env.reset()
   
-  env.step_adversary(0)
-  env.step_adversary(1)
+  map, time,done, inf =env.step_adversary(0)
+  map, time,done, inf = env.step_adversary(1)
   
   while not done:
-    map, time,done, inf = env.step_adversary(2)
-    map, time,done, inf = env.step_adversary(3)
+    map, time,done, inf = env.step_adversary(np.random.randint(2,4))
+  
  
   env.step([multifrozenlake.RIGHT])
   env.step([multifrozenlake.RIGHT])
-  env.reset_agent(0)
+  #env.reset_agent(0)
   env.step([multifrozenlake.UP])
-  
+  env.step([multifrozenlake.LEFT])
 

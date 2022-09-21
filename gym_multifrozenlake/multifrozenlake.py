@@ -224,9 +224,6 @@ class MultiFrozenLakeEnv(Env):
         nA = 4
         nS = nrow * ncol
 
-        self.initial_state_distrib = np.array(map == b"S").astype("float64").ravel()
-        self.initial_state_distrib /= self.initial_state_distrib.sum()
-
         self.P = {s: {a: [] for a in range(nA)} for s in range(nS)}
        
         def to_s(row, col):
@@ -282,13 +279,13 @@ class MultiFrozenLakeEnv(Env):
         # 'fixed_environment' is True.
         self.map = self._gen_map(self.map,self.ncol, self.nrow)
         self.generate_P(self.nrow, self.ncol, self.map, self.is_slippery)
-
+        self.step_count = 0
         # should be defined by _gen_map
         for a in range(self.n_agents):
           assert self.agent_pos[a] is not None
         
         for a in range(self.n_agents):
-            pos = categorical_sample(self.initial_state_distrib, self.np_random)
+            pos = categorical_sample(0., self.np_random)
             self.agent_pos[a][0] = pos // self.ncol
             self.agent_pos[a][1] = pos % self.ncol
         self.lastaction = [None]*self.n_agents
@@ -419,15 +416,15 @@ class MultiFrozenLakeEnv(Env):
         # Step each agent
         for a in agent_ordering:
             rewards[a] = self.step_one_agent(actions[a], a)
-
+        self.step_count += 1
         collective_done = False
         # In competitive version, if one agent finishes the episode is over.
         if self.competitive:
-            collective_done = np.sum(self.done) >= 1 ## WO WIRD SELF.DONE GESETZT?
+            collective_done = np.sum(self.done) >= 1 
 
         # Running out of time applies to all agents
-        # if self.step_count >= self.max_steps:
-        #  collective_done = True
+        if self.step_count >= self.max_steps:
+          collective_done = True
         
         return self.agent_pos, rewards, collective_done, {}
     
@@ -643,7 +640,7 @@ class MultiFrozenLakeEnv(Env):
 
         with closing(outfile):
             return outfile.getvalue()
-            
+
     def agent_is_done(self, agent_id):
 
         self.done[agent_id] = True
@@ -654,5 +651,6 @@ class MultiFrozenLakeEnv(Env):
 if __name__=="__main__":
     fl = MultiFrozenLakeEnv(render_mode='human', is_slippery = False)
     fl.reset()
+    
 
  
