@@ -31,29 +31,32 @@ class PPO(object):
         for s in range(episode_length):
             
             done = False
-            state = env.reset()
             self.buffer.clear()
+            state = env.reset()[0]
 
             for e in range(steps):
-                action, probs = self.agent.get_action(state)
-                value = self.agent.critic(np.array([state])).numpy()
-                next_state, reward, done, _ = env.step(action)
-                self.buffer.storeTransition(state, action, reward, value, probs, done)
+                observation = state
+                action, probs = self.agent.get_action(observation)
+                value = self.agent.critic(np.array([observation])).numpy()
+
+                next_state, reward, done, _, p = env.step(action)
+                self.buffer.storeTransition(observation, action, reward, value[0][0], probs[0], done)
                 state = next_state
 
                 if done == 1:
                     env.reset()
 
-            value = self.agent.critic(np.array([state])).numpy()
+            value = self.agent.critic(np.array([observation])).numpy()
             self.buffer.values.append(value[0][0])
-            np.reshape(probs, (len(probs),2))
-            probs = np.stack(probs, axis=0)
+            probs_list = self.buffer.probs
+            np.reshape(probs_list, (len(probs_list),4))
+            probs = np.stack(probs_list, axis=0)
             
             for epochs in range(10):
                 actor_loss, critic_loss = self.agent.learn(self.buffer.states, self.buffer.actions, self.buffer.rewards,
-                                        self.buffer.values, self.buffer.dones, self.buffer.probs)
+                                        self.buffer.values, self.buffer.dones, probs)
 
-        rewards = [test_reward(env) for _ in range(5)]
+        rewards = [self.test_reward(env) for _ in range(5)]
         average = np.mean(rewards)
         best = np.max(rewards)
 
@@ -62,12 +65,23 @@ class PPO(object):
 if __name__=="__main__":
     env = gym.make("FrozenLake-v1")
     algo = PPO(env.action_space.n, env.observation_space.n)
+    #print(env.actions)
+    avg_rewards_list = []
     target = False
+
     while target == False:
-        avg, max_r = algo.run(env, 500, 256)
-        if avg > 200:
+        algo.run(env, 5000, 256)
+        avg_reward, _ = np.mean([algo.test_reward(env) for _ in range(5)])
+        print(f"total test reward is {avg_reward}")
+        avg_rewards_list.append(avg_reward)
+        if avg_reward > best_reward:
+            print('best reward=' + str(avg_reward))
+            algo.actor.save('model_actor_{}_{}'.format(s, avg_reward), save_format="tf")
+            algo.critic.save('model_critic_{}_{}'.format(s, avg_reward), save_format="tf")
+            best_reward = avg_reward
+        if best_reward == 200:
             target = True
-    
+        env.reset()
 
 
 

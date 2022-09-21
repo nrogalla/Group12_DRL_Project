@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
+import tensorflow.keras.losses as kls
 from Actor import Actor
 from Critic import Critic
 
@@ -17,14 +18,13 @@ class PPO_Agent(object):
         self.critic = Critic(number_observations, 256, 128, 64)
 
     def get_action(self, observation):
-        
         observation = np.array([[observation]])
         action_probs = self.actor(observation)
         action_probs = action_probs.numpy()
-        probs = tf.tfp.distributions.Categorical(probs=action_probs, dtype=tf.float32)
+        probs = tfp.distributions.Categorical(probs=action_probs[0], dtype=tf.float32)
         action = probs.sample()
         
-        return int(action.numpy()[0]), probs
+        return int(action.numpy()), action_probs
 
     def process_buffer(self, states, actions, rewards, values, dones):
         g = 0
@@ -33,7 +33,6 @@ class PPO_Agent(object):
         for i in range(1, len(rewards) + 1):
             delta = rewards[-i] + self.gamma * values[-i + 1] *dones[-i] - values[i]
             g = delta + self.gamma * dones[-i] * g
-            returns.append(g + values[-i])
             returns.insert(0, g + values[-i])
 
         adv = np.array(returns, dtype=np.float32) - values[:-1]
@@ -68,19 +67,20 @@ class PPO_Agent(object):
 
     def learn(self, states, actions, rewards, values, dones, probs):
         states, actions, returns, advantages = self.process_buffer(states, actions, rewards, values, dones)
-        discnt_rewards = tf.reshape(discnt_rewards, (len(discnt_rewards),))
-        adv = tf.reshape(adv, (len(adv),))
+
+        discnt_rewards = tf.reshape(returns, (len(returns),))
+        adv = tf.reshape(advantages, (len(advantages),))
 
         old_p = probs
 
-        old_p = tf.reshape(old_p, (len(old_p),2))
+        old_p = tf.reshape(old_p, (len(old_p),4))
         with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
             p = self.actor(states, training=True)
             v =  self.critic(states,training=True)
             v = tf.reshape(v, (len(v),))
             td = tf.math.subtract(discnt_rewards, v)
             c_loss = 0.5 * kls.mean_squared_error(discnt_rewards, v)
-            a_loss = self.actor_loss(p, actions, adv, probs, c_loss)
+            a_loss = self.calculate_loss(p, actions, adv, probs, c_loss)
             
         grads1 = tape1.gradient(a_loss, self.actor.trainable_variables)
         grads2 = tape2.gradient(c_loss, self.critic.trainable_variables)

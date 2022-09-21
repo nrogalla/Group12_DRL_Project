@@ -15,6 +15,7 @@ class Actor(tf.keras.Model):
 
     def call(self, input):
         
+        input = tf.expand_dims(input, -1)
         x = self.first_layer(input)
         x = self.second_layer(x)
         if 'third_layer' in locals():
