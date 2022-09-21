@@ -1,16 +1,16 @@
 import numpy as np
 import tensorflow as tf
-import tensorflow_probabilty as tfp
-import Actor
-import Critic
+import tensorflow_probability as tfp
+from Actor import Actor
+from Critic import Critic
 
 class PPO_Agent(object):
 
     def __init__(self, number_actions: int, number_observations: int, alpha: float = 0.001, gamma: float = 0.7, epsilon: float = 0.25):
         self.n_actions = number_actions
         self.n_observations = number_observations
-        self.optimizer_actor = tf.keras.optimizer.Adam(learning_rate=alpha)
-        self.optimizer_critic = tf.keras.optimizer.Adam(learning_rate=alpha)
+        self.optimizer_actor = tf.keras.optimizers.Adam(learning_rate=alpha)
+        self.optimizer_critic = tf.keras.optimizers.Adam(learning_rate=alpha)
         self.gamma = gamma
         self.epsilon = epsilon
         self.actor = Actor(number_actions, number_observations, 256, 128, 64)
@@ -18,7 +18,7 @@ class PPO_Agent(object):
 
     def get_action(self, observation):
         
-        observation = np.array([observation])
+        observation = np.array([[observation]])
         action_probs = self.actor(observation)
         action_probs = action_probs.numpy()
         probs = tf.tfp.distributions.Categorical(probs=action_probs, dtype=tf.float32)

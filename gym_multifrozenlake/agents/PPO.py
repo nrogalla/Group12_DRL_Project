@@ -1,5 +1,5 @@
-import PPO_Agent
-import Buffer
+from PPO_Agent import PPO_Agent
+from Buffer import Buffer
 import numpy as np
 import gym
 
@@ -59,13 +59,14 @@ class PPO(object):
 
         return average, best
 
-
-env = gym.make("FrozenLake-v1")
-algo = PPO(env.action_space.n, env.observation_space.n)
-while target == False:
-    avg, max_r = algo.run(env, 500, 256)
-    if avg > 200:
-        target = True
+if __name__=="__main__":
+    env = gym.make("FrozenLake-v1")
+    algo = PPO(env.action_space.n, env.observation_space.n)
+    target = False
+    while target == False:
+        avg, max_r = algo.run(env, 500, 256)
+        if avg > 200:
+            target = True
     
 
 
