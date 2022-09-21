@@ -51,8 +51,10 @@ class PPO_Agent(object):
         sur1 = []
         sur2 = []
         
-        for pb, t, op,a  in zip(probability, adv, old_probs, actions):
+        for pb, t, op, a  in zip(probability, adv, old_probs, actions):
                         t =  tf.constant(t)
+                        pb = tf.squeeze(pb)
+                        op = tf.squeeze(op)
                         ratio = tf.math.divide(pb[a],op[a])
                         s1 = tf.math.multiply(ratio,t)
                         s2 =  tf.math.multiply(tf.clip_by_value(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon),t)
@@ -84,6 +86,11 @@ class PPO_Agent(object):
             
         grads1 = tape1.gradient(a_loss, self.actor.trainable_variables)
         grads2 = tape2.gradient(c_loss, self.critic.trainable_variables)
+        a_v = self.actor.trainable_variables
+        print(a_v)
+        c_v = self.critic.trainable_variables
+        print(c_v)
+
         self.optimizer_actor.apply_gradients(zip(grads1, self.actor.trainable_variables))
         self.optimizer_critic.apply_gradients(zip(grads2, self.critic.trainable_variables))
         return a_loss, c_loss
