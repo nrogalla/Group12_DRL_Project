@@ -16,11 +16,11 @@ class PPO(object):
 
     def test_reward(self, env):
         total_reward = 0
-        state = env.reset()
+        state = env.reset()[0]
         done = False
         while not done:
             action = np.argmax(self.agent.actor(np.array([state])).numpy())
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _, p = env.step(action)
             state = next_state
             total_reward += reward
 
@@ -33,6 +33,7 @@ class PPO(object):
             done = False
             self.buffer.clear()
             state = env.reset()[0]
+            print("new step")
 
             for e in range(steps):
                 observation = state
@@ -43,7 +44,7 @@ class PPO(object):
                 self.buffer.storeTransition(observation, action, reward, value[0][0], probs[0], done)
                 state = next_state
 
-                if done == 1:
+                if done:
                     env.reset()
 
             value = self.agent.critic(np.array([observation])).numpy()
@@ -65,13 +66,11 @@ class PPO(object):
 if __name__=="__main__":
     env = gym.make("FrozenLake-v1")
     algo = PPO(env.action_space.n, env.observation_space.n)
-    #print(env.actions)
     avg_rewards_list = []
     target = False
-
-    while target == False:
-        algo.run(env, 5000, 256)
-        avg_reward, _ = np.mean([algo.test_reward(env) for _ in range(5)])
+    best_reward = 0
+    for x in range(2):
+        avg_reward, best = algo.run(env, 10, 8)
         print(f"total test reward is {avg_reward}")
         avg_rewards_list.append(avg_reward)
         if avg_reward > best_reward:
@@ -82,6 +81,6 @@ if __name__=="__main__":
         if best_reward == 200:
             target = True
         env.reset()
-
+env.close()
 
 
