@@ -247,6 +247,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
           if self.map[i][j] is None:
             self.map[i][j] = "F"
       self.generate_P(self.nrow,self.ncol, self.map, False)
+      print(self.P)
       self. valid = multifrozenlake.is_valid(self.map, self.nrow, self.ncol)
       if self.render_mode == "human":
             self.render()
@@ -413,6 +414,7 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
           if self.map[i][j] is None:
             self.map[i][j] = "F"
       self.generate_P(self.nrow,self.ncol, self.map, False)
+      print(self.P)
       self. valid = multifrozenlake.is_valid(self.map, self.nrow, self.ncol)
       
 

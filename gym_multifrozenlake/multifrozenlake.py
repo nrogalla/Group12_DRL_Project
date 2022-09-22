@@ -279,6 +279,7 @@ class MultiFrozenLakeEnv(Env):
         # 'fixed_environment' is True.
         self.map = self._gen_map(self.map,self.ncol, self.nrow)
         self.generate_P(self.nrow, self.ncol, self.map, self.is_slippery)
+        print(self.P)
         self.step_count = 0
         # should be defined by _gen_map
         for a in range(self.n_agents):
@@ -385,6 +386,7 @@ class MultiFrozenLakeEnv(Env):
         transitions = self.P[self.agent_pos[agent_id][0]*self.ncol + self.agent_pos[agent_id][1]][act]
         i = categorical_sample([t[0] for t in transitions], self.np_random)
         p, pos, r, t = transitions[i]
+        print(t)
         posit = [None] *2
         posit[0],posit[1] = pos // self.ncol, pos % self.ncol
         agent_blocking = False
@@ -396,7 +398,11 @@ class MultiFrozenLakeEnv(Env):
             self.agent_pos[agent_id] = posit
             self.lastaction[agent_id] = act
             if self.map[posit[0]][posit[1]] == 'G':
-                self.agent_is_done(agent_id)
+                #self.agent_is_done(agent_id)
+                self.done[agent_id] = True
+            if t is True:
+                #self.agent_is_done(agent_id)
+                self.done[agent_id] = True
             
                 
             
@@ -425,7 +431,8 @@ class MultiFrozenLakeEnv(Env):
         # Running out of time applies to all agents
         if self.step_count >= self.max_steps:
           collective_done = True
-        
+        print("agentpos")
+        print(self.agent_pos)
         return self.agent_pos, rewards, collective_done, {}
     
     

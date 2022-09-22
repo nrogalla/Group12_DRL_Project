@@ -1,7 +1,19 @@
+
+
 from PPO_Agent import PPO_Agent
 from Buffer import Buffer
 import numpy as np
 import gym
+import sys
+#import os
+
+#sys.path.insert(0, '..'))
+sys.path.insert(0, 'c:\\Users\\Nicole\\Documents\\UNI\\Cognitive_Science\\DRL\\PAIRED-Project\\Group12_DRL_Project\\gym_multifrozenlake')
+import multifrozenlake 
+import sys
+sys.path.insert(0, 'c:\\Users\\Nicole\\Documents\\UNI\\Cognitive_Science\\DRL\\PAIRED-Project\\Group12_DRL_Project\\gym_multifrozenlake\\envs')
+#import envs.adversarial
+from envs.adversarial import ReparameterizedAdversarialEnv
 
 class PPO(object):
     def __init__(self, action_space, observation_space):
@@ -20,7 +32,7 @@ class PPO(object):
         done = False
         while not done:
             action = np.argmax(self.agent.actor(np.array([state])).numpy())
-            next_state, reward, done, _, p = env.step(action)
+            next_state, reward, done, _ = env.step(action)
             state = next_state
             total_reward += reward
 
@@ -36,20 +48,23 @@ class PPO(object):
                 break
             done = False
             self.buffer.clear()
-            state = env.reset()[0]
+            state = env.agent_pos[0]#env.reset_agent(0)['map']
+            print(state)
             print("new step")
 
             for e in range(steps):
-                observation = state
+                observation = state[0]* env.nrow+ state[1]
                 action, probs = self.agent.get_action(observation)
                 value = self.agent.critic(np.array([observation])).numpy()
 
-                next_state, reward, done, _, p = env.step(action)
+                next_state, reward, done, _ = env.step(action)
+                print("next_state")
+                print(next_state)
                 self.buffer.storeTransition(observation, action, reward, value[0][0], probs[0], 1-done)
-                state = next_state
+                state = next_state[0]
 
                 if done:
-                    env.reset()
+                    env.reset_agent(0)
 
             value = self.agent.critic(np.array([observation])).numpy()
             self.buffer.values.append(value[0][0])
@@ -76,8 +91,18 @@ class PPO(object):
         env.close()
 
 if __name__=="__main__":
-    env = gym.make("FrozenLake-v1")
-    algo = PPO(env.action_space.n, env.observation_space.n)
+    env = ReparameterizedAdversarialEnv(n_holes = 3,size = 5, render_mode = "human", agent_view_size = 2, max_steps = 2)#gym.make("FrozenLake-v1")
+    env.reset()
+  
+    map, time,done, inf =env.step_adversary(0)
+    map, time,done, inf = env.step_adversary(1)
+  
+    while not done:
+     map, time,done, inf = env.step_adversary(np.random.randint(2,4))
+    
+
+  
+    algo = PPO(4, 5*5)#env.observation_space.n)
     algo.run(env, 50, 32)
 
 

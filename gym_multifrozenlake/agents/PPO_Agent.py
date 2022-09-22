@@ -18,13 +18,18 @@ class PPO_Agent(object):
         self.critic = Critic(number_observations, 128, 64, 0)
 
     def get_action(self, observation):
-        observation = np.array([[observation]])
+        
+        observation = np.array([[observation]])#tf.expand_dims(observation, 0)#
+        print("observation")
+        print(observation)
         action_probs = self.actor(observation)
+        print(action_probs)
         action_probs = action_probs.numpy()
         probs = tfp.distributions.Categorical(probs=action_probs, dtype=tf.float32)
-        action = probs.sample()
+        action = int(probs.sample())
+        print(action)
         
-        return int(action.numpy()[0]), action_probs
+        return [action], action_probs
 
     def process_buffer(self, states, actions, rewards, values, dones):
        # g = 0
