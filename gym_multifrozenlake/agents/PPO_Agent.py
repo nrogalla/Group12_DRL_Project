@@ -7,15 +7,15 @@ from Critic import Critic
 
 class PPO_Agent(object):
 
-    def __init__(self, number_actions: int, number_observations: int, alpha: float = 0.001, gamma: float = 0.9, epsilon: float = 0.25):
+    def __init__(self, number_actions: int, number_observations: int, alpha: float = 0.0001, gamma: float = 1, epsilon: float = 0.2):
         self.n_actions = number_actions
         self.n_observations = number_observations
         self.optimizer_actor = tf.keras.optimizers.Adam(learning_rate=alpha)
         self.optimizer_critic = tf.keras.optimizers.Adam(learning_rate=alpha)
         self.gamma = gamma
         self.epsilon = epsilon
-        self.actor = Actor(number_actions, number_observations, 128, 64, 32)
-        self.critic = Critic(number_observations, 128, 64, 32)
+        self.actor = Actor(number_actions, number_observations, 128, 64, 0)
+        self.critic = Critic(number_observations, 128, 64, 0)
 
     def get_action(self, observation):
         observation = np.array([[observation]])
@@ -27,28 +27,38 @@ class PPO_Agent(object):
         return int(action.numpy()[0]), action_probs
 
     def process_buffer(self, states, actions, rewards, values, dones):
+       # g = 0
+       # returns = []
+
+        #for i in range(1, len(rewards) + 1):
+        #    delta = rewards[-i] + self.gamma * values[-i + 1] *dones[-i] - values[i]
+        #    g = delta + self.gamma * dones[-i] * g
+        #    returns.insert(0, g + values[-i])
+
+        #adv = np.array(returns, dtype=np.float32) - values[:-1]
+        #adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
+        #states = np.array(states, dtype=np.float32)
+        #actions = np.array(actions, dtype=np.int32)
+        #returns = np.array(returns, dtype=np.float32)
+        #return states, actions, returns, adv
         g = 0
         returns = []
+        for i in reversed(range(len(rewards))):
+            delta = rewards[i] + self.gamma * values[i + 1] * dones[i] - values[i]
+            g = delta + self.gamma * 0.95 * dones[i] * g
+            returns.append(g + values[i])
 
-        for i in range(1, len(rewards) + 1):
-            delta = rewards[-i] + self.gamma * values[-i + 1] *dones[-i] - values[i]
-            g = delta + self.gamma * dones[-i] * g
-            returns.insert(0, g + values[-i])
-
+        returns.reverse()
         adv = np.array(returns, dtype=np.float32) - values[:-1]
         adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
         states = np.array(states, dtype=np.float32)
         actions = np.array(actions, dtype=np.int32)
         returns = np.array(returns, dtype=np.float32)
-        return states, actions, returns, adv    
+        return states, actions, returns, adv   
 
 
 
     def calculate_loss(self, probs, actions, adv, old_probs, critic_loss):
-        
-        #print(np.shape(probs))
-        #print(np.shape(np.squeeze(old_probs)))
-        #print(np.squeeze(old_probs)==probs)
         
         probability = probs
         entropy = tf.reduce_mean(tf.math.negative(tf.math.multiply(probability,tf.math.log(probability))))
@@ -57,8 +67,6 @@ class PPO_Agent(object):
         
         for pb, t, op, a  in zip(probability, adv, np.squeeze(old_probs), actions):
                         t =  tf.constant(t)
-                        #pb = tf.squeeze(pb)
-                        #op = tf.squeeze(op)
                         ratio = tf.math.divide(pb[a],op[a])
                         s1 = tf.math.multiply(ratio,t)
                         s2 = tf.math.multiply(tf.clip_by_value(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon),t)
