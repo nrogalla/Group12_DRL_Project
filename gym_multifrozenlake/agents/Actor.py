@@ -23,8 +23,3 @@ class Actor(tf.keras.Model):
         else:
             x = self.output_layer(x)
         return x
-
-
-
-
-
