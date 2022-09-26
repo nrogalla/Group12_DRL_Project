@@ -2,9 +2,9 @@
   "ExpandedNodes": [
     "",
     "\\gym_multifrozenlake",
-    "\\gym_multifrozenlake\\envs",
-    "\\gym_multifrozenlake\\img"
+    "\\gym_multifrozenlake\\agents",
+    "\\gym_multifrozenlake\\envs"
   ],
-  "SelectedNode": "\\gym_multifrozenlake\\envs\\adversarial.py",
+  "SelectedNode": "\\gym_multifrozenlake\\agents\\multifrozenlake.py",
   "PreviewInSolutionExplorer": false
 }
