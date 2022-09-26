@@ -71,8 +71,8 @@ class PPO_Agent(object):
         for pb, t, op, a  in zip(probs, adv, old_probs, actions):
                         t =  tf.constant(t)
                         ratio = tf.math.divide(pb[a],op[a])
-                        s1 = tf.math.multiply(ratio,adv)
-                        s2 = tf.math.multiply(tf.clip_by_value(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon),adv)
+                        s1 = tf.math.multiply(ratio,t)
+                        s2 = tf.math.multiply(tf.clip_by_value(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon),t)
                         actor_loss.append(tf.math.minimum(s1,s2))
                         sur1.append(s1)
                         sur2.append(s2)
@@ -88,29 +88,22 @@ class PPO_Agent(object):
         
 
         discnt_rewards = tf.reshape(returns, (len(returns),))
-        adv = tf.reshape(advantages, (len(advantages),))
+        adv = tf.reshape(advantages, (len(advantages),))        
 
-        with tf.GradientTape() as tape2:
+        with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
             p = self.actor(states, training=True)
             v = self.critic(states,training=True)
             v = tf.reshape(v, (len(v),))
             c_loss = 0.5 * kls.mean_squared_error(discnt_rewards, v)
-            a_loss, _ = self.calculate_loss(p, actions, adv, self.old_probs, c_loss)
-
-        grads2 = tape2.gradient(c_loss, self.critic.trainable_variables)
-
-        with tf.GradientTape() as tape1:
-            p = self.actor(states, training=True)
-            v = self.critic(states,training=True)
-            v = tf.reshape(v, (len(v),))
-            c_loss = 0.5 * kls.mean_squared_error(discnt_rewards, v)
-            a_loss, _ = self.calculate_loss(p, actions, adv, self.old_probs, c_loss)
+            a_loss, total_loss = self.calculate_loss(p, actions, adv, self.old_probs, c_loss)
         
-        self.old_probs = probs
+        
+        grads2 = tape2.gradient(c_loss, self.critic.trainable_variables)
         grads1 = tape1.gradient(a_loss, self.actor.trainable_variables)
+        self.old_probs = probs
         
 
         self.optimizer_actor.apply_gradients(zip(grads1, self.actor.trainable_variables))
         self.optimizer_critic.apply_gradients(zip(grads2, self.critic.trainable_variables))
-        return a_loss, c_loss
+        return a_loss, c_loss, total_loss
         
