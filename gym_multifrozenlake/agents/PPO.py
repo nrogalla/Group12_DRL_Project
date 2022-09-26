@@ -28,13 +28,17 @@ class PPO(object):
 
     def test_reward(self, env):
         total_reward = 0
-        state = env.reset()[0]
+        indices = [i for i in range(env.observation_space.n)]
+        depth = env.observation_space.n
+        one_hot_states = tf.one_hot(indices, depth)
+        state = env.reset()
         done = False
         while not done:
-            action = np.argmax(self.agent.actor(np.array([state])).numpy())
-            next_state, reward, fail, done, _ = env.step(action)
-            if fail:
-                next_state = env.reset()[0]
+            ohs = one_hot_states[state]
+            action = np.argmax(self.agent.actor(np.array([ohs])).numpy())
+            next_state, reward, done, _ = env.step(action)
+            if done and reward == 0:
+                next_state = env.reset()
             state = next_state
             total_reward += reward
 
@@ -45,30 +49,31 @@ class PPO(object):
         target = False
         best_reward = 0
         self.agent.old_probs = [[0.25, 0.25, 0.25, 0.25] for i in range(steps)]
+        counter = 0
+        indices = [i for i in range(env.observation_space.n)]
+        depth = env.observation_space.n
+        one_hot_states = tf.one_hot(indices, depth)
         
-        
-        for e in range(episode_length):
-            print('.')
+        while counter <= episode_length:
             if target == True:
                 break
             done = False
             self.buffer.clear()
-            #state = env.agent_pos[0]#env.reset_agent(0)['map']
-            state = env.reset()[0]
+            state = env.reset()
 
             for s in range(steps):
-                action, probs = self.agent.get_action(state)
-                value = self.agent.critic(np.array([state])).numpy()
+                ohs = one_hot_states[state]
+                action, probs = self.agent.get_action(ohs)
+                value = self.agent.critic(np.array([ohs])).numpy()
 
-                next_state, reward, fail, done, _ = env.step(action)
-                self.buffer.storeTransition(state, action, reward, value[0][0], probs[0], done)
+                next_state, reward, done, _ = env.step(action)
+                self.buffer.storeTransition(ohs, action, reward, value[0][0], probs[0], done)
                 state = next_state
-                if fail:
-                    state = env.reset()[0]
-                if done:
-                    state = env.reset()[0]
 
-            value = self.agent.critic(np.array([state])).numpy()
+                if done:
+                    state = env.reset()
+
+            value = self.agent.critic(np.array([one_hot_states[state]])).numpy()
             self.buffer.values.append(value[0][0])
             probs_list = np.array(self.buffer.probs)
             
@@ -81,7 +86,7 @@ class PPO(object):
                 rewards = [self.test_reward(env) for _ in range(100)]
                 avg_reward = np.mean(rewards)
                 best_reward = 0
-                print('Episode: ' + str(e))
+                print('Episode: ' + str(counter))
                 print(f"total test reward is {avg_reward}")
                 if avg_reward > best_reward:
                     print('best reward=' + str(avg_reward))
@@ -93,8 +98,17 @@ class PPO(object):
                 env.reset()
                 for i in range(env.observation_space.n):
                     print('probs for state:' + str(i))
-                    print(self.agent.actor.predict(np.array([i])))
+                    print(self.agent.actor.predict(np.array([one_hot_states[state]])))
+                counter+=1
         env.close()
+
+if __name__=="__main__":
+    
+
+    env = gym.make("FrozenLake-v1", desc=["SFFF", "FHFH", "FFFH", "HFFG"], is_slippery=False)
+
+    algo = PPO(env.action_space.n, env.observation_space.n)#env.observation_space.n)
+    algo.run(env, 500, env.observation_space.n*1.5)
 
 if __name__=="__main__":
     #env = ReparameterizedAdversarialEnv(n_holes = 3, size = 5, render_mode = "human", agent_view_size = 3, max_steps = 128)
