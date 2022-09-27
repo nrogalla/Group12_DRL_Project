@@ -2,6 +2,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 import tensorflow.keras.losses as kls
+from Actor import Actor
+from Critic import Critic
 
 class PPO_Agent(object):
 
@@ -24,7 +26,7 @@ class PPO_Agent(object):
         probs = tfp.distributions.Categorical(probs=action_probs, dtype=tf.float32)
         action = int(probs.sample())
         
-        return action, action_probs
+        return [action], action_probs
 
     def process_buffer(self, states, actions, rewards, values, dones):
        # g = 0
@@ -41,23 +43,35 @@ class PPO_Agent(object):
         #actions = np.array(actions, dtype=np.int32)
         #returns = np.array(returns, dtype=np.float32)
         #return states, actions, returns, adv
+        '''
         g = 0
-        returns = []
+        d_returns = []
+        batch_size = len(dones)
+        for t in reversed(range(batch_size)): 
+            ret = 0
+            for i in range(0, batch_size-t):
+                ret += self.gamma**i * rewards[t+i]
+            d_returns.append(ret)
+        d_returns.reverse()
+
+        d_returns = (d_returns - np.mean(d_returns)) / (np.std(d_returns) + 1e-10)
+        print(d_returns)
         for i in reversed(range(len(rewards))):
             delta = rewards[i] + self.gamma * values[i + 1] * dones[i] - values[i]
             if dones[i] == 1:
                 g = delta + self.gamma * 0.95 * 0 * g
             else:
                 g = delta + self.gamma * 0.95 * 1 * g
-            returns.append(g + values[i])
+        
 
-        returns.reverse()
-        adv = np.array(returns, dtype=np.float32) - values[:-1]
+        adv = np.array(d_returns, dtype=np.float32) - values[:-1]
         adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
+        '''
+
         states = np.array(states, dtype=np.float32)
         actions = np.array(actions, dtype=np.int32)
-        returns = np.array(returns, dtype=np.float32)
-        return states, actions, returns, adv   
+        #returns = np.array(d_returns, dtype=np.float32)
+        return states, actions,    
 
 
 
@@ -68,8 +82,10 @@ class PPO_Agent(object):
         sur2 = []
         actor_loss = []
         
-        for pb, t, op, a  in zip(probs, adv, old_probs, actions):
+        for pb, t, op, a  in zip(probs, adv, np.squeeze(old_probs), actions):
                         t =  tf.constant(t)
+                        pb = np.array(pb)
+                        tf.stop_gradient(pb)
                         ratio = tf.math.divide(pb[a],op[a])
                         s1 = tf.math.multiply(ratio,t)
                         s2 = tf.math.multiply(tf.clip_by_value(ratio, 1.0 - self.epsilon, 1.0 + self.epsilon),t)
@@ -80,30 +96,30 @@ class PPO_Agent(object):
         sr1 = tf.stack(sur1)
         sr2 = tf.stack(sur2)
         
-        loss = tf.math.negative(tf.reduce_mean(tf.math.minimum(sr1, sr2)) - critic_loss + 0.001 * entropy)
+        loss = tf.math.negative(tf.reduce_mean(tf.math.minimum(sr1, sr2)) + critic_loss - 0.001 * entropy)
         return actor_loss, loss
 
-    def learn(self, states, actions, rewards, values, dones, probs):
-        states, actions, returns, advantages = self.process_buffer(states, actions, rewards, values, dones)
-        
+    def learn(self, buffer):
+        #states, actions, returns, advantages = self.process_buffer(states, actions, rewards, values, dones)
+        states = np.array(buffer.states, dtype=np.float32)
 
-        discnt_rewards = tf.reshape(returns, (len(returns),))
-        adv = tf.reshape(advantages, (len(advantages),))        
+        #discnt_rewards = tf.reshape(buffer.returns, (len(returns),))
+        #adv = tf.reshape(advantages, (len(advantages),))        
 
         with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
             p = self.actor(states, training=True)
             v = self.critic(states,training=True)
             v = tf.reshape(v, (len(v),))
-            c_loss = 0.5 * kls.mean_squared_error(discnt_rewards, v)
-            a_loss, total_loss = self.calculate_loss(p, actions, adv, self.old_probs, c_loss)
+            c_loss = 0.5 * kls.mean_squared_error(buffer.discounted_returns,v)
+            a_loss, total_loss = self.calculate_loss(p, buffer.actions, buffer.advantage, self.old_probs, c_loss)
         
-        
+        grads1 = tape1.gradient(total_loss, self.actor.trainable_variables)
         grads2 = tape2.gradient(c_loss, self.critic.trainable_variables)
-        grads1 = tape1.gradient(a_loss, self.actor.trainable_variables)
-        self.old_probs = probs
+       
+        self.old_probs = buffer.probs
         
 
         self.optimizer_actor.apply_gradients(zip(grads1, self.actor.trainable_variables))
         self.optimizer_critic.apply_gradients(zip(grads2, self.critic.trainable_variables))
-        return a_loss, c_loss, total_loss
+        return a_loss, c_loss#, total_loss
         

@@ -6,10 +6,10 @@ class Actor(tf.keras.Model):
     def __init__(self, number_actions: int, number_observations: int, size_first_layer: int, size_second_layer: int, size_third_layer: int = 0):
 
         super(Actor, self).__init__()       
-        self.first_layer = tf.keras.layers.Dense(size_first_layer, activation = tf.nn.relu)
-        self.second_layer = tf.keras.layers.Dense(size_second_layer, activation = tf.nn.relu)
+        self.first_layer = tf.keras.layers.Dense(size_first_layer, activation = tf.nn.sigmoid)
+        self.second_layer = tf.keras.layers.Dense(size_second_layer, activation = tf.nn.sigmoid)
         if (size_third_layer > 0):
-            self.third_layer = tf.keras.layers.Dense(size_third_layer, activation = tf.nn.relu)
+            self.third_layer = tf.keras.layers.Dense(size_third_layer, activation = tf.nn.sigmoid)
         self.output_layer = tf.keras.layers.Dense(number_actions, activation = tf.nn.softmax)
 
     def call(self, input):

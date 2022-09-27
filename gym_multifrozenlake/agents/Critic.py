@@ -7,10 +7,10 @@ class Critic(tf.keras.Model):
 
         super(Critic, self).__init__()
         
-        self.first_layer = tf.keras.layers.Dense(size_first_layer, activation = tf.nn.relu)
-        self.second_layer = tf.keras.layers.Dense(size_second_layer, activation = tf.nn.relu)
+        self.first_layer = tf.keras.layers.Dense(size_first_layer, activation = tf.nn.sigmoid)
+        self.second_layer = tf.keras.layers.Dense(size_second_layer, activation = tf.nn.sigmoid)
         if (size_third_layer > 0):
-            self.third_layer = tf.keras.layers.Dense(size_third_layer, activation = tf.nn.relu)
+            self.third_layer = tf.keras.layers.Dense(size_third_layer, activation = tf.nn.sigmoid)
         self.output_layer = tf.keras.layers.Dense(1, activation = None)
 
     def call(self, input):

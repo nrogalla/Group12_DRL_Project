@@ -58,8 +58,8 @@ def generate_empty_map(nrow: int = 8, ncol: int = 8):
     Returns:
         An empty map
     """
-    assert ncol >= 3
-    assert nrow >= 3
+    assert ncol >= 2
+    assert nrow >= 2
 
     return [[None for _ in range(ncol)] for _ in range(nrow)]
 
@@ -171,15 +171,14 @@ class MultiFrozenLakeEnv(Env):
           shape=(self.n_agents,) + obs_map_shape,
           dtype='uint8')
 
-        # Observations are dictionaries containing an encoding of the grid and the
-        # agent's direction
+        # Observations are dictionaries containing the map and the agents position
         observation_space = {'map': map_space}
-        if self.fully_observed:
-            self.position_obs_space = gym.spaces.Box(low=0,
+        #if self.fully_observed:
+        self.position_obs_space = gym.spaces.Box(low=0,
                                                 high=max(nrow, ncol),
                                                 shape=(self.n_agents, 2),
                                                 dtype='uint8')
-            observation_space['position'] = self.position_obs_space
+        observation_space['position'] = self.position_obs_space
         self.observation_space = gym.spaces.Dict(observation_space)
 
         # Environment configuration
@@ -279,7 +278,6 @@ class MultiFrozenLakeEnv(Env):
         # 'fixed_environment' is True.
         self.map = self._gen_map(self.map,self.ncol, self.nrow)
         self.generate_P(self.nrow, self.ncol, self.map, self.is_slippery)
-        print(self.P)
         self.step_count = 0
         # should be defined by _gen_map
         for a in range(self.n_agents):
@@ -317,9 +315,9 @@ class MultiFrozenLakeEnv(Env):
 
         obs = {
             'map': maps,
+            'position':positions
         }
-        if self.fully_observed:
-            obs['position'] = positions
+       
 
         return obs
 
@@ -386,7 +384,6 @@ class MultiFrozenLakeEnv(Env):
         transitions = self.P[self.agent_pos[agent_id][0]*self.ncol + self.agent_pos[agent_id][1]][act]
         i = categorical_sample([t[0] for t in transitions], self.np_random)
         p, pos, r, t = transitions[i]
-        print(t)
         posit = [None] *2
         posit[0],posit[1] = pos // self.ncol, pos % self.ncol
         agent_blocking = False
@@ -431,8 +428,10 @@ class MultiFrozenLakeEnv(Env):
         # Running out of time applies to all agents
         if self.step_count >= self.max_steps:
           collective_done = True
-        print("agentpos")
-        print(self.agent_pos)
+        #obs = {
+          #  'map': maps,
+         #   'position':positions
+        #}
         return self.agent_pos, rewards, collective_done, {}
     
     
