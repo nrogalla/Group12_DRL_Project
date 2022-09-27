@@ -432,7 +432,9 @@ class MultiFrozenLakeEnv(Env):
           #  'map': maps,
          #   'position':positions
         #}
-        return self.agent_pos, rewards, collective_done, {}
+        obs = self.gen_obs()
+        
+        return obs, rewards, collective_done, {}
     
     
     def place_obj(self,

@@ -457,8 +457,8 @@ if __name__=="__main__":
   
  
   env.step([multifrozenlake.RIGHT])
-  env.step([multifrozenlake.RIGHT])
+  #env.step([multifrozenlake.RIGHT])
   #env.reset_agent(0)
-  env.step([multifrozenlake.UP])
-  env.step([multifrozenlake.LEFT])
+  #env.step([multifrozenlake.UP])
+  #env.step([multifrozenlake.LEFT])
 
