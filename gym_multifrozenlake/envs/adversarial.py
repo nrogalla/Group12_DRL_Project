@@ -32,7 +32,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
   """
 
   def __init__(self, n_holes=50, size=8, agent_view_size=5, max_steps=250,
-               goal_noise=0., random_z_dim=50, choose_goal_last=False, render_mode: Optional[str] = None):
+               goal_noise=0., random_z_dim=50, choose_goal_last=False, render_mode: Optional[str] = None, fully_observed = True):
     """Initializes environment in which adversary places goal, agent, obstacles.
     Args:
       n_holes: The maximum number of obstacles the adversary can place.
@@ -66,7 +66,8 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
         max_steps=max_steps,
         agent_view_size=agent_view_size,
         competitive=True,
-        render_mode = render_mode
+        render_mode = render_mode,
+        fully_observed = fully_observed
     )
     self.start_agent_pos = [[None,None]] * self.n_agents
     # Metrics
@@ -301,7 +302,7 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
   been placed at a different location, they will move to the new location.
   """
 
-  def __init__(self, n_holes=50, size=15, agent_view_size=5, max_steps=250, render_mode: Optional[str] = None):
+  def __init__(self, n_holes=50, size=15, agent_view_size=5, max_steps=250, render_mode: Optional[str] = None, fully_observed = True):
     """Initializes environment in which adversary places goal, agent, obstacles.
     Args:
       n_holes: The maximum number of obstacles the adversary can place.
@@ -317,7 +318,8 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
         max_steps=max_steps,
         agent_view_size=agent_view_size,
         render_mode = render_mode,
-        n_holes = n_holes
+        n_holes = n_holes,
+        fully_observed=fully_observed
     )
 
     # Adversary has four actions: place agent, goal, wall, or nothing
@@ -446,7 +448,7 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
 
 
 if __name__=="__main__":
-  env = ReparameterizedAdversarialEnv(n_holes = 3,size = 5, render_mode = "human", agent_view_size = 2, max_steps = 2)
+  env = ReparameterizedAdversarialEnv(n_holes = 3,size = 5, render_mode = "human", fully_observed = True, max_steps = 2)
   env.reset()
   
   map, time,done, inf =env.step_adversary(0)

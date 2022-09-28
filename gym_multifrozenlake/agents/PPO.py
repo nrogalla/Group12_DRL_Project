@@ -17,9 +17,9 @@ sys.path.insert(0, 'c:\\Users\\Nicole\\Documents\\UNI\\Cognitive_Science\\DRL\\P
 from adversarial import ReparameterizedAdversarialEnv
 
 class PPO(object):
-    def __init__(self, action_space, observation_space, gamma: float = 0.95,):
+    def __init__(self, action_space, map_size, gamma: float = 0.95,):
 
-        self.agent = PPO_Agent(action_space, observation_space)
+        self.agent = PPO_Agent(action_space, map_size)
         self.buffer = Buffer()
         self.episode_reward = []
         self.total_average = []
@@ -47,10 +47,22 @@ class PPO(object):
                # next_state = env.agent_pos[0] 
                 #print("reset")
             
-            state = next_state[0]
+            state = next_state['position'][0]
             observation = state[0]* env.nrow+ state[1]
             total_reward += reward[0]
         return total_reward
+    def one_hot(self, map):
+        ohm = [x[:] for x in map]#np.empty(shape = (len(map),len(map[0])))
+        print(ohm)
+        for i in range(len(map)):
+            for j in range(len(map)):
+                if map[i][j] == 'G':
+                    ohm[i][j] = [[0], [0], [1]]
+                if map[i][j] == 'H':
+                    ohm[i][j] = [[0], [1], [0]]
+                if map[i][j] == 'F':
+                    ohm[i][j] = [[1], [0], [0]]
+        return ohm
 
     def run(self, env, episode_number: int, episode_length: int):
         
@@ -67,9 +79,10 @@ class PPO(object):
                 break
             done = False
             self.buffer.clear()
-            env.reset_agent(0)
-            state = env.agent_pos[0] #env.reset()
-            observation = state[0]* env.nrow+ state[1]
+            
+            state = env.reset_agent(0)#env.agent_pos[0] #env.reset()
+            print(state)
+            observation = state['position'][0][0]* env.nrow+ state['position'][0][1]
             c = 0
             episode_values = []
             episode_dones = []
@@ -77,21 +90,28 @@ class PPO(object):
             while c <= episode_length:
                 
                 ohs = one_hot_states[observation]
+                one_hot_map = self.one_hot(state['map'][0])
+                print(one_hot_map)
                 action, probs = self.agent.get_action(ohs)
-                value = self.agent.critic(np.array([ohs])).numpy()
+                value = self.agent.critic([np.array([ohs], dtype= np.int32),np.array(one_hot_map)]).numpy()
                 episode_values.append(value[0][0])
                 next_state, reward, done, _ = env.step(action)
                 episode_dones.append(done)
                 episode_rewards.append(reward[0])
                 self.buffer.storeTransition(ohs, action, reward[0], value[0][0], probs[0], done)
-                state = next_state[0]
-                observation = state[0]* env.nrow+ state[1]
-
+                
+                
+                
+                state = next_state['position'][0]
+                observation = state['position'][0][0]* env.nrow+ state['position'][0][1]
                 if done:
                     env.reset_agent(0)
                     state = env.agent_pos[0]
-                    observation = state[0]* env.nrow+ state[1]
-                    value = self.agent.critic(np.array([ohs])).numpy()
+                    observation = state['position'][0][0]* env.nrow+ state['position'][0][1]
+                    print(ohs)
+                    print(one_hot_map)
+                    value = self.agent.critic([np.array([ohs], dtype= np.int32),np.array([one_hot_map])]).numpy()
+                    print(value)
                     episode_values.append(value)
                     c +=1 
                     d_returns = self.buffer.calculate_disc_returns(episode_rewards, self.gamma)
@@ -127,14 +147,15 @@ class PPO(object):
         env.close()
 
 if __name__=="__main__":
-    env = ReparameterizedAdversarialEnv(n_holes = 3, size = 2, render_mode = "human", agent_view_size = 3, max_steps = 7)
+    env = ReparameterizedAdversarialEnv(n_holes = 3, size = 2, render_mode = "human", agent_view_size = 2, max_steps = 7)
     env.reset()
   
     map, time,done, inf =env.step_adversary(0)
+    map, time,done, inf = env.step_adversary(1)
     map, time,done, inf = env.step_adversary(3)
    
     map, time,done, inf = env.step_adversary(2)
-    map, time,done, inf = env.step_adversary(1)
+    
   
     #while not done:
     # map, time,done, inf = env.step_adversary(np.random.randint(2,4))
@@ -142,8 +163,8 @@ if __name__=="__main__":
 
     #env = gym.make("FrozenLake-v1", desc=["SFFF", "FHFH", "FFFH", "HFFG"], is_slippery=False)
 
-    algo = PPO(4, 4)#env.observation_space.n)
-    algo.run(env, 5000, 8)
+    algo = PPO(4, 2)#env.observation_space.n)
+    algo.run(env, 1, 8)
 
 
 
