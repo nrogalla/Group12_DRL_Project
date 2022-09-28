@@ -27,41 +27,38 @@ class PPO(object):
         self.best_reward = 0
         self.avg_rewards_list = []
         self.gamma = 0.95
+        self.map_size = map_size
 
     def test_reward(self, env):
         total_reward = 0
-        indices = [i for i in range(4)]#env.observation_space.n)]
-        depth = 4#env.observation_space.n
+        indices = [i for i in range(4)]
+        depth = 4
         one_hot_states = tf.one_hot(indices, depth)
-        env.reset_agent(0)
-        state = env.agent_pos[0] #env.reset()
-        observation = state[0]* env.nrow+ state[1]
+        
+        state = env.reset_agent(0)
+        observation = state['position'][0][0]* env.nrow+ state['position'][0][1]
+        ohs = one_hot_states[observation]
+        one_hot_map = self.one_hot(state['map'][0])
         done = False
         while not done:
             ohs = one_hot_states[observation]
-            action = np.argmax(self.agent.actor(np.array([ohs])).numpy())
+            action = np.argmax(self.agent.actor([np.array([ohs], dtype= np.int32),np.array([one_hot_map])]).numpy())
             next_state, reward, done, _ = env.step([action])
-            #if done and reward[0] == 0:
-             #   #next_state = env.reset()
-              #  env.reset_agent(0)
-               # next_state = env.agent_pos[0] 
-                #print("reset")
-            
-            state = next_state['position'][0]
-            observation = state[0]* env.nrow+ state[1]
+            observation = next_state['position'][0][0]* env.nrow+ next_state['position'][0][1]
+            one_hot_map = self.one_hot(next_state['map'][0])
             total_reward += reward[0]
         return total_reward
+
     def one_hot(self, map):
-        ohm = [x[:] for x in map]#np.empty(shape = (len(map),len(map[0])))
-        print(ohm)
+        ohm = [x[:] for x in map]
         for i in range(len(map)):
             for j in range(len(map)):
                 if map[i][j] == 'G':
-                    ohm[i][j] = [[0], [0], [1]]
+                    ohm[i][j] = [0, 0, 1]
                 if map[i][j] == 'H':
-                    ohm[i][j] = [[0], [1], [0]]
+                    ohm[i][j] = [0, 1, 0]
                 if map[i][j] == 'F':
-                    ohm[i][j] = [[1], [0], [0]]
+                    ohm[i][j] = [1, 0, 0]
         return ohm
 
     def run(self, env, episode_number: int, episode_length: int):
@@ -71,7 +68,7 @@ class PPO(object):
         self.agent.old_probs = [[0.25, 0.25, 0.25, 0.25] for i in range(episode_length)]
         counter = 0
         indices = [i for i in range(4)]
-        depth = 4#env.observation_space.n
+        depth = 4
         one_hot_states = tf.one_hot(indices, depth)
         
         while counter <= episode_number:
@@ -80,8 +77,8 @@ class PPO(object):
             done = False
             self.buffer.clear()
             
-            state = env.reset_agent(0)#env.agent_pos[0] #env.reset()
-            print(state)
+            state = env.reset_agent(0)
+            
             observation = state['position'][0][0]* env.nrow+ state['position'][0][1]
             c = 0
             episode_values = []
@@ -91,35 +88,35 @@ class PPO(object):
                 
                 ohs = one_hot_states[observation]
                 one_hot_map = self.one_hot(state['map'][0])
-                print(one_hot_map)
-                action, probs = self.agent.get_action(ohs)
-                value = self.agent.critic([np.array([ohs], dtype= np.int32),np.array(one_hot_map)]).numpy()
+                
+                action, probs = self.agent.get_action(ohs, one_hot_map)
+                value = self.agent.critic([np.array([ohs], dtype= np.int32),np.array([one_hot_map])]).numpy()
+                print("value")
+                print(value)
                 episode_values.append(value[0][0])
                 next_state, reward, done, _ = env.step(action)
                 episode_dones.append(done)
                 episode_rewards.append(reward[0])
-                self.buffer.storeTransition(ohs, action, reward[0], value[0][0], probs[0], done)
+                self.buffer.storeTransition(ohs, action, reward[0], value[0][0], probs[0], done, one_hot_map)
                 
-                
-                
-                state = next_state['position'][0]
-                observation = state['position'][0][0]* env.nrow+ state['position'][0][1]
+                observation = next_state['position'][0][0]* env.nrow+ next_state['position'][0][1]
                 if done:
-                    env.reset_agent(0)
-                    state = env.agent_pos[0]
+                    state = env.reset_agent(0)
+                
                     observation = state['position'][0][0]* env.nrow+ state['position'][0][1]
-                    print(ohs)
-                    print(one_hot_map)
+                    
+                    ohs = one_hot_states[observation]
+                    one_hot_map = self.one_hot(state['map'][0])
                     value = self.agent.critic([np.array([ohs], dtype= np.int32),np.array([one_hot_map])]).numpy()
+                    print("value")
                     print(value)
-                    episode_values.append(value)
+                    episode_values.append(value[0][0])
                     c +=1 
                     d_returns = self.buffer.calculate_disc_returns(episode_rewards, self.gamma)
                     adv = self.buffer.calculate_advantage(episode_rewards, episode_values, episode_dones, self.gamma)
                     episode_values = []
                     episode_dones = []
-                    episode_rewards = []
-                    
+                    episode_rewards = []    
 
             print('Training')
             for epochs in range(10):
@@ -132,8 +129,8 @@ class PPO(object):
             print(f"total test reward is {avg_reward}")
             if avg_reward > best_reward:
                 print('best reward=' + str(avg_reward))
-                algo.agent.actor.save('model_actor_{}_{}'.format(s, avg_reward), save_format="tf")
-                algo.agent.critic.save('model_critic_{}_{}'.format(s, avg_reward), save_format="tf")
+                algo.agent.actor.save('model_actor_{}_{}'.format(counter, avg_reward), save_format="tf")
+                algo.agent.critic.save('model_critic_{}_{}'.format(counter, avg_reward), save_format="tf")
                 best_reward = avg_reward
             if best_reward*100 == 75:
                 target = True
@@ -142,7 +139,7 @@ class PPO(object):
             observation = state[0]* env.nrow+ state[1]
             for i in range(4):#env.observation_space.n):
                 print('probs for state:' + str(i))
-                print(self.agent.actor.predict(np.array([one_hot_states[observation]])))
+                print(self.agent.actor.predict([np.array([ohs], dtype= np.int32),np.array([one_hot_map])]))
             counter+=1
         env.close()
 
@@ -164,7 +161,7 @@ if __name__=="__main__":
     #env = gym.make("FrozenLake-v1", desc=["SFFF", "FHFH", "FFFH", "HFFG"], is_slippery=False)
 
     algo = PPO(4, 2)#env.observation_space.n)
-    algo.run(env, 1, 8)
+    algo.run(env, 40, 8)
 
 
 

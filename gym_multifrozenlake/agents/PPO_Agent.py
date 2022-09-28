@@ -18,10 +18,10 @@ class PPO_Agent(object):
         self.critic = Critic(map_size, 16, 32)
         self.old_probs = []
 
-    def get_action(self, observation):
+    def get_action(self, ohs,one_hot_map ):
         
-        observation = np.array([observation])
-        action_probs = self.actor(observation)
+        #observation = np.array([observation])
+        action_probs = self.actor([np.array([ohs], dtype= np.int32),np.array([one_hot_map])])
         action_probs = action_probs.numpy()
         probs = tfp.distributions.Categorical(probs=action_probs, dtype=tf.float32)
         action = int(probs.sample())
@@ -81,6 +81,10 @@ class PPO_Agent(object):
         sur1 = []
         sur2 = []
         actor_loss = []
+        print("cal loss adv")
+        print(adv)
+        print(len(actions))
+        print(actions)
         
         for pb, t, op, a  in zip(probs, adv, np.squeeze(old_probs), actions):
                         t =  tf.constant(t)
@@ -107,8 +111,9 @@ class PPO_Agent(object):
         #adv = tf.reshape(advantages, (len(advantages),))        
 
         with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
-            p = self.actor(states, training=True)
-            v = self.critic(states,training=True)
+            p = self.actor([states, buffer.one_hot_maps], training=True)
+            v = self.critic([states, buffer.one_hot_maps],training=True)
+            #([np.array([ohs], dtype= np.int32),np.array([one_hot_map])])
             v = tf.reshape(v, (len(v),))
             c_loss = 0.5 * kls.mean_squared_error(buffer.discounted_returns,v)
             a_loss, total_loss = self.calculate_loss(p, buffer.actions, buffer.advantage, self.old_probs, c_loss)

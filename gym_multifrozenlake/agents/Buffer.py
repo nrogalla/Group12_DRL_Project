@@ -10,14 +10,16 @@ class Buffer(object):
         self.dones = []
         self.discounted_returns = []
         self.advantage = []
+        self.one_hot_maps = []
             
-    def storeTransition(self, state, action, reward, value, probs, done):
+    def storeTransition(self, state, action, reward, value, probs, done, one_hot_map):
         self.states.append(state)
         self.actions.append(action)
         self.rewards.append(reward)
         self.values.append(value)
         self.probs.append(probs)
         self.dones.append(done)
+        self.one_hot_maps.append(one_hot_map)
     
     def clear(self):
         self.states = []
@@ -28,6 +30,7 @@ class Buffer(object):
         self.dones = []
         self.discounted_returns = []
         self.advantage = []
+        self.one_hot_maps = []
     
     # computes discounted returns for one episode
     def calculate_disc_returns(self, rewards, gamma):
@@ -46,14 +49,15 @@ class Buffer(object):
     # calculates advantages for one episode
     def calculate_advantage(self, rewards, values, dones, gamma):
         g = 0
+        adv = []
         for i in reversed(range(len(rewards))):
             delta = rewards[i] + gamma * values[i + 1] * dones[i] - values[i]
             if dones[i] == 1:
                 g = delta + gamma * 0.95 * 0 * g
             else:
                 g = delta + gamma * 0.95 * 1 * g
-            
-        adv = g
+
+            adv.append( np.float(g))
         adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
-        self.advantage += adv.tolist()
+        self.advantage += adv#.tolist()
         return adv
