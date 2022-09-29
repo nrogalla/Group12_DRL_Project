@@ -19,7 +19,7 @@ from adversarial import ReparameterizedAdversarialEnv
 class PPO(object):
     def __init__(self, action_space, map_size, gamma: float = 0.95,):
 
-        self.agent = PPO_Agent(action_space, map_size)
+        self.agent = PPO_Agent(action_space, map_size, 128)
         self.buffer = Buffer()
         self.episode_reward = []
         self.total_average = []
@@ -65,7 +65,6 @@ class PPO(object):
         
         target = False
         best_reward = 0
-        self.agent.old_probs = [[0.25, 0.25, 0.25, 0.25] for i in range(episode_length)]
         counter = 0
         indices = [i for i in range(4)]
         depth = 4

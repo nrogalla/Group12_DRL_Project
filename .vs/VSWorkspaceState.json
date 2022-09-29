@@ -3,8 +3,9 @@
     "",
     "\\gym_multifrozenlake",
     "\\gym_multifrozenlake\\agents",
+    "\\gym_multifrozenlake\\all",
     "\\gym_multifrozenlake\\envs"
   ],
-  "SelectedNode": "\\gym_multifrozenlake\\agents\\PPO.py",
+  "SelectedNode": "\\gym_multifrozenlake\\all\\PPO.py",
   "PreviewInSolutionExplorer": false
 }
