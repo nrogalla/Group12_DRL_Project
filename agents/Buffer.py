@@ -11,7 +11,8 @@ class Buffer(object):
         self.discounted_returns = []
         self.advantage = []
         self.one_hot_maps = []
-            
+    
+    # stores the given set of variables 
     def storeTransition(self, state, action, reward, value, probs, done, one_hot_map):
         self.position.append(state)
         self.actions.append(action)
@@ -21,6 +22,7 @@ class Buffer(object):
         self.dones.append(done)
         self.one_hot_maps.append(one_hot_map)
     
+        # clears the memory
     def clear(self):
         self.position = []
         self.actions = []
@@ -32,7 +34,7 @@ class Buffer(object):
         self.advantage = []
         self.one_hot_maps = []
     
-    # computes discounted returns for one episode
+    # computes discounted returns for one episode and adds them to the memory
     def calculate_disc_returns(self, rewards, gamma):
         d_returns = []
         batch_size = len(rewards) 
@@ -45,7 +47,8 @@ class Buffer(object):
         self.discounted_returns += d_returns
         
         return d_returns
-    # calculates advantages for one episode
+
+    # calculates advantages for one episode and adds them to the memory
     def calculate_advantage(self, rewards, values, dones, gamma):
         g = 0
         adv = []
@@ -57,7 +60,7 @@ class Buffer(object):
                 g = delta + gamma * 0.95 * 1 * g
 
             adv.append( np.float(g))
+
         adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
-        
         self.advantage += adv.tolist()
         return adv
