@@ -2,7 +2,7 @@ import numpy as np
 class Buffer(object):
 
     def __init__(self):
-        self.states = []
+        self.position = []
         self.actions = []
         self.rewards = []
         self.values = []
@@ -13,7 +13,7 @@ class Buffer(object):
         self.one_hot_maps = []
             
     def storeTransition(self, state, action, reward, value, probs, done, one_hot_map):
-        self.states.append(state)
+        self.position.append(state)
         self.actions.append(action)
         self.rewards.append(reward)
         self.values.append(value)
@@ -22,7 +22,7 @@ class Buffer(object):
         self.one_hot_maps.append(one_hot_map)
     
     def clear(self):
-        self.states = []
+        self.position = []
         self.actions = []
         self.rewards = []
         self.values = []
@@ -43,6 +43,8 @@ class Buffer(object):
                 ret += np.power(gamma,i) * rewards[t+i]
             d_returns.append(ret)
         d_returns.reverse()
+        print("DRETURNS")
+        print(d_returns)
         self.discounted_returns += d_returns
         
         return d_returns
@@ -59,5 +61,6 @@ class Buffer(object):
 
             adv.append( np.float(g))
         adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
-        self.advantage += adv#.tolist()
+        
+        self.advantage += adv.tolist()
         return adv

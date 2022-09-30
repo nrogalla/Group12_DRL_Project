@@ -22,14 +22,14 @@ class PPO_Agent(object):
     def get_action(self, ohs,one_hot_map ):
         
         #observation = np.array([observation])
-        action_probs = self.actor([np.array([ohs], dtype= np.int32),np.array([one_hot_map])])
+        action_probs = self.actor([np.array([[ohs]], dtype= np.int32),np.array([one_hot_map])])
         action_probs = action_probs.numpy()
         probs = tfp.distributions.Categorical(probs=action_probs, dtype=tf.float32)
         action = int(probs.sample())
         
         return [action], action_probs
 
-    def process_buffer(self, states, actions, rewards, values, dones):
+    def process_buffer(self, position, actions, rewards, values, dones):
        # g = 0
        # returns = []
 
@@ -40,10 +40,10 @@ class PPO_Agent(object):
 
         #adv = np.array(returns, dtype=np.float32) - values[:-1]
         #adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
-        #states = np.array(states, dtype=np.float32)
+        #position = np.array(position, dtype=np.float32)
         #actions = np.array(actions, dtype=np.int32)
         #returns = np.array(returns, dtype=np.float32)
-        #return states, actions, returns, adv
+        #return position, actions, returns, adv
         '''
         g = 0
         d_returns = []
@@ -69,10 +69,10 @@ class PPO_Agent(object):
         adv = (adv - np.mean(adv)) / (np.std(adv) + 1e-10)
         '''
 
-        states = np.array(states, dtype=np.float32)
+        position = np.array(position, dtype=np.float32)
         actions = np.array(actions, dtype=np.int32)
         #returns = np.array(d_returns, dtype=np.float32)
-        return states, actions,    
+        return position, actions,    
 
 
 
@@ -82,10 +82,6 @@ class PPO_Agent(object):
         sur1 = []
         sur2 = []
         actor_loss = []
-        print("cal loss adv")
-        print(adv)
-        print(len(actions))
-        print(actions)
         
         for pb, t, op, a  in zip(probs, adv, np.squeeze(old_probs), actions):
                         t =  tf.constant(t)
@@ -105,15 +101,15 @@ class PPO_Agent(object):
         return actor_loss, loss
 
     def learn(self, buffer):
-        #states, actions, returns, advantages = self.process_buffer(states, actions, rewards, values, dones)
-        states = np.array(buffer.states, dtype=np.float32)
+        #position, actions, returns, advantages = self.process_buffer(position, actions, rewards, values, dones)
+        position = np.array(buffer.position, dtype=np.float32)
 
         #discnt_rewards = tf.reshape(buffer.returns, (len(returns),))
         #adv = tf.reshape(advantages, (len(advantages),))        
 
         with tf.GradientTape() as tape1, tf.GradientTape() as tape2:
-            p = self.actor([states, buffer.one_hot_maps], training=True)
-            v = self.critic([states, buffer.one_hot_maps],training=True)
+            p = self.actor([position, buffer.one_hot_maps], training=True)
+            v = self.critic([position, buffer.one_hot_maps],training=True)
             #([np.array([ohs], dtype= np.int32),np.array([one_hot_map])])
             v = tf.reshape(v, (len(v),))
             c_loss = 0.5 * kls.mean_squared_error(buffer.discounted_returns,v)

@@ -15,7 +15,6 @@ class Actor(tf.keras.Model):
         self.output_layer = tf.keras.layers.Dense(number_actions, activation = tf.nn.softmax)
 
     def call(self, input):
-        
         input_conv = tf.cast(input[1], dtype = tf.float32)
         x1 = self.first_layer(input[0])
         x2 = self.conv_one(input_conv)

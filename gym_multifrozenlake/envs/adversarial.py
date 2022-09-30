@@ -11,6 +11,7 @@ Has additional functions, step_adversary, and reset_agent. How to use:
    adversary designed it. A new agent can now play it using the step() function.
 """
 import random
+from stringprep import map_table_b2
 from typing import Optional
 import gym
 #import networkx as nx
@@ -55,7 +56,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     self.random_z_dim = random_z_dim
     self.choose_goal_last = choose_goal_last
     self.ncol = self.nrow = size
-   
+    
 
     # Add two actions for placing the agent and goal.
     self.adversary_max_steps = self.n_holes + 2
@@ -160,7 +161,7 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
     # Current position of the agent
     self.reset_agent_status()
 
-    if self.start_agent_pos[agent_id] is None:
+    if self.start_agent_pos[agent_id][0] is None:
       raise ValueError('Trying to place agent at empty start position.')
     else:
       self.map[self.start_agent_pos[agent_id][0]][self.start_agent_pos[agent_id][1]] = 'F' #str(agent_id)
@@ -248,7 +249,6 @@ class AdversarialEnv(multifrozenlake.MultiFrozenLakeEnv):
           if self.map[i][j] is None:
             self.map[i][j] = "F"
       self.generate_P(self.nrow,self.ncol, self.map, False)
-      print(self.P)
       self. valid = multifrozenlake.is_valid(self.map, self.nrow, self.ncol)
       if self.render_mode == "human":
             self.render()
@@ -351,8 +351,8 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
     return obs
 
   def select_random_grid_position(self):
-    row =  np.random.random_integers(1,self.nrow)
-    col = np.random.random_integers(1, self.ncol)
+    row =  np.random.random_integers(0,self.nrow-1)
+    col = np.random.random_integers(0, self.ncol-1)
     return np.array([
         row,
         col
@@ -416,13 +416,15 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
           if self.map[i][j] is None:
             self.map[i][j] = "F"
       self.generate_P(self.nrow,self.ncol, self.map, False)
-      print(self.P)
       self. valid = multifrozenlake.is_valid(self.map, self.nrow, self.ncol)
-      
-
+      print(self.map)
+      print("AGENTPOS")
+      print(self.agent_pos)
       # If the adversary has not placed the agent or goal, place them randomly
-      if self.agent_pos[0] is None:
-        self.agent_pos[0] = self.select_random_grid_position()
+      if self.agent_pos[0][0] is None:
+        self.agent_pos[0] = self.start_agent_pos[0] =  self.select_random_grid_position()
+        print("random agent pos")
+        print(self.agent_pos)
         self.map[self.agent_pos[0][0]][self.agent_pos[0][0]] = 'F'# str(0)
         self.deliberate_agent_placement = 0
       else:
@@ -430,10 +432,14 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
 
       if self.goal_pos is None:
         self.goal_pos = self.select_random_grid_position()
+        print("GOAL")
+        print(self.goal_pos)
         self.map[self.goal_pos[0]][self.goal_pos[1]] = "G"
 
       self.valid = multifrozenlake.is_valid(self.map, self.nrow, self.ncol)
-      if self.render_mode == "human":
+      
+      if self.render_mode == "human" and done == True:
+        print(self.map)
         self.render()
     else:
       x, y = self.get_xy_from_step(self.adversary_step_count)
@@ -459,8 +465,5 @@ if __name__=="__main__":
   
  
   env.step([multifrozenlake.RIGHT])
-  #env.step([multifrozenlake.RIGHT])
-  #env.reset_agent(0)
-  #env.step([multifrozenlake.UP])
-  #env.step([multifrozenlake.LEFT])
+  
 

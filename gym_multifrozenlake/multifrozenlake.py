@@ -172,14 +172,13 @@ class MultiFrozenLakeEnv(Env):
           dtype='uint8')
 
         # Observations are dictionaries containing the map and the agents position
-        observation_space = {'map': map_space}
-        #if self.fully_observed:
         self.position_obs_space = gym.spaces.Box(low=0,
                                                 high=max(nrow, ncol),
                                                 shape=(self.n_agents, 2),
                                                 dtype='uint8')
-        observation_space['position'] = self.position_obs_space
-        self.observation_space = gym.spaces.Dict(observation_space)
+        self.observation_space = {'map': map_space,
+                            'position':self.position_obs_space }
+        
 
         # Environment configuration
         self.nrow = nrow
@@ -315,7 +314,7 @@ class MultiFrozenLakeEnv(Env):
 
         obs = {
             'map': maps,
-            'position':self.agent_pos#positions
+            'position': self.agent_pos
         }
        
 
@@ -400,9 +399,6 @@ class MultiFrozenLakeEnv(Env):
             if t is True:
                 #self.agent_is_done(agent_id)
                 self.done[agent_id] = True
-            
-                
-            
 
         if self.render_mode == "human":
             self.render()
@@ -428,10 +424,6 @@ class MultiFrozenLakeEnv(Env):
         # Running out of time applies to all agents
         if self.step_count >= self.max_steps:
           collective_done = True
-        #obs = {
-          #  'map': maps,
-         #   'position':positions
-        #}
         obs = self.gen_obs()
         print(obs)
         
