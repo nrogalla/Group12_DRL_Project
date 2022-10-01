@@ -19,3 +19,6 @@ NOTE: Due to time constraints it was not possible to complete this project, ther
 Jens Huth <jehuth@uni-osnabrueck.de>
 Nils Niehaus <nniehaus@uni-osnabrueck.de>
 Nicole Rogalla <nrogalla@uni-osnabrueck.de>
+
+## Additional Environment
+https://github.com/H-27/env_FrozenLake-PPO.git
