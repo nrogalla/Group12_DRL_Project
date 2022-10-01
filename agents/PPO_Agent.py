@@ -7,10 +7,10 @@ from .Critic import Critic
 
 class PPO_Agent(object):
 
-    def __init__(self, number_actions: int, map_size: int, epoch_length, alpha: float = 0.0001, gamma: float = 0.95, epsilon: float = 0.25):
+    def __init__(self, number_actions: int, map_size: int, epoch_length, learning_rate: float = 0.0001, gamma: float = 0.95, epsilon: float = 0.2):
         self.n_actions = number_actions
-        self.optimizer_actor = tf.keras.optimizers.Adam(learning_rate=alpha)
-        self.optimizer_critic = tf.keras.optimizers.Adam(learning_rate=alpha)
+        self.optimizer_actor = tf.keras.optimizers.Adam(learning_rate)
+        self.optimizer_critic = tf.keras.optimizers.Adam(learning_rate)
         self.gamma = gamma
         self.epsilon = epsilon
         self.actor = Actor(number_actions, map_size, 16, 32)

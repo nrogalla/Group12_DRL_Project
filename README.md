@@ -1,27 +1,21 @@
-﻿# Group12_DRL_Project
+# Group12_DRL_Project
  
 ## About  
+This repository is the final project for the course "Deep reinforcement learning". It aims at offering a reimplementation of the algorithm PAIRED presented in the paper:
+Dennis, M.*, Jaques, N.*, Vinitsky, E., Bayen, A., Russell, S., Critch, A., & Levine, S., Emergent Complexity and Zero-Shot Transfer via Unsupervised Environment Design, Neural Information Processing Systems (NeurIPS), Virtual (2020).
+Their code can be found in this Github repository: https://github.com/google-research/google-research/tree/master/social_rl/adversarial_env
 
-## Setup
-
-### Setting up the setup.txt file
-In the setup.txt file we specify certain directory paths and certain parameters.
-Considering the size of the dataset it may be useful to specify a different path under DataPath to another harddrive with more memory or to a specific location.
-Default options are the options we used for our data and training, other options are also possible.
-
-## Structure (not finished)
+## Structure
 The project is structured into several modules, namely:
- * Data
- * Model
- * Training
- * Policy
- * Evaluation
+ * Environment
+ * PPO-Agent
+ The environment is an extension of the Open-AI Gym FrozenLake as it offers functionality for building the environment as well as running the environment in a multi-agent scenario. This is implemented in multifrozenlake.py. Adversarial.py offers functionality for the adversary to build the environment such as step_adversary or reset_agent. 
+ The agent is learning based on Proximal Policy Optimization using an Actor and a Critic Network both to be found in the folder "agents". 
+ The PAIRED algorithm is located in the driver.py.
 
-Those modules contain required functions and classes.
-The main.py script combined with the setup.txt file in the setup folder coordinate what is called when and with which arguments.
-NOTE: Due to time constraints it was not possible to complete this project, therefore the training does not yet work and the data pipeline downloads some uneccessary images still.
+NOTE: Due to time constraints it was not possible to complete this project, therefore the training does not yet work.
 
 ## Contact
-Jens Huth <jhuth@uni-osnabrueck.de>
-Nil Niehaus <nniehaus@uni-osnabrueck.de>
+Jens Huth <jehuth@uni-osnabrueck.de>
+Nils Niehaus <nniehaus@uni-osnabrueck.de>
 Nicole Rogalla <nrogalla@uni-osnabrueck.de>

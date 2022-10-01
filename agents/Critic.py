@@ -10,7 +10,6 @@ class Critic(tf.keras.Model):
         self.first_layer = tf.keras.layers.Dense(size_first_layer, activation = tf.nn.sigmoid)
         self.second_layer = tf.keras.layers.Dense(size_second_layer, activation = tf.nn.sigmoid)
         self.conv_one = tf.keras.layers.Conv2D(32, 3, activation=tf.nn.relu, padding = 'same', input_shape=(map_size, map_size, 3))
-        
         self.flatten = tf.keras.layers.Flatten()
         if (size_third_layer > 0):
             self.third_layer = tf.keras.layers.Dense(size_third_layer, activation = tf.nn.sigmoid)
@@ -23,8 +22,7 @@ class Critic(tf.keras.Model):
         x2 = self.conv_one(input_conv)
         x2 = self.flatten(x2)
         x = tf.keras.layers.concatenate((x1, x2))
-        x = self.second_layer(x)
-        
+        x = self.second_layer(x) 
         if 'third_layer' in locals():
             x = self.third_layer(x)
         x = self.output_layer(x)
